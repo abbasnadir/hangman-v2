@@ -1,4 +1,4 @@
-import express from "express";
+import express from 'express';
 import type { ResponseError } from "../../types/response-error.js";
 
 export function errorHandler(
