@@ -1,0 +1,1 @@
+This folder documents the design decisions of the app, database and API endpoints.
