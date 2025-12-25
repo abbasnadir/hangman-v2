@@ -2,7 +2,7 @@
 
 ## Setup
 
-- [ ] Setup error handling for production and deployment in server
+- [X] Setup error handling for production and deployment in server
 - [ ] Setup client
 - [X] Database
 

@@ -1,5 +1,6 @@
+// Type imports
 import type { ResponseError } from "../types/response-error.js";
-
+// Library imports
 import createHttpError from "http-errors";
 import express, { type Express } from "express";
 import path from "path";
@@ -7,9 +8,10 @@ import cookieParser from "cookie-parser";
 import logger from "morgan";
 import cors from "cors";
 
+// Module imports
 import { router as indexRouter } from "./routes/index.js";
 import { router as usersRouter } from "./routes/users.js";
-import { errorHandler } from "./errors/error-handler.js";
+import { errorHandler } from "./middlewares/errorHandler.js";
 
 const app: Express = express();
 
