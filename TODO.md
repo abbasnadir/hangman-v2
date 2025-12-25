@@ -4,7 +4,7 @@
 
 - [ ] Setup error handling for production and deployment in server
 - [ ] Setup client
-- [ ] Database
+- [X] Database
 
 ## Prototype
 
