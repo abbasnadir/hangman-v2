@@ -13,15 +13,25 @@ import { usersRouter } from "./routes/users.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
 import { __dirname } from "./utils/paths.js";
 import { NotFoundError } from "./errors/httpErrors.js";
+import { authHandler } from "./middlewares/authHandler.js";
 const app: Express = express();
 
 // External Middlewares
 app.use(logger("dev"));
-app.use(cors({ origin: "http://localhost:3000", credentials: true }));
+app.use(
+  cors({
+    origin:
+      process.env.NODE_ENV === "production"
+        ? process.env.PROD_URL
+        : "http://localhost:3000",
+    credentials: true,
+  }),
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, "public")));
+app.use(authHandler);
 
 // App routes
 app.use("/", indexRouter);
