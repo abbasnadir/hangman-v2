@@ -2,3 +2,4 @@ PORT=
 NODE_ENV=development || production
 SUPABASE_URL=
 SUPABASE_SERVICE_KEY=
+SUPABASE_JWT=

@@ -24,3 +24,6 @@
 - [ ] UI Redesign continuation
 - [ ] Design for the users with low connectivity
 - [ ] Handle unauthorised users
+
+## Optional
+- [ ] Use jwks to rotate the supabase signing key automatically.
