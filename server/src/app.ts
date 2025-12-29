@@ -31,11 +31,11 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
-app.use(express.static(path.join(
-  __dirname, "public")));
+app.use(express.static(path.join(__dirname, "public")));
 
 // Register App routes
-await routesHandler();
+const apiRouter = await routesHandler();
+app.use(apiRouter);
 
 // catch 404 and forward to error handler
 app.use(function (req, res, next) {

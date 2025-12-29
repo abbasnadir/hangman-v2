@@ -1,11 +1,24 @@
-import express from "express";
-var router = express.Router();
+import type { Request, Response } from "express";
+import type { RouterObject } from "../../types/router.js";
 
-export const meRouter: express.Router = router.get(
-  "/",
-  function (req, res, next) {
-    res.send(
-      `id: ${req.user.id}\nemail: ${req.user.email}\nrole: ${req.user.role}`,
-    );
-  },
-);
+/* GET home page. */
+const meRouter: RouterObject = {
+  path: "/me",
+  functions: [
+    {
+      method: "get",
+      authorization: "required",
+      rateLimit: "strict",
+      keyType: "default",
+      handler: (req: Request, res: Response) => {
+        res.status(200).json({
+          id: req.user.id,
+          email: req.user.email,
+          role: req.user.role,
+        });
+      },
+    },
+  ],
+};
+
+export default meRouter;

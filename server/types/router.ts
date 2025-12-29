@@ -10,9 +10,11 @@ export interface APIObject {
   props?: string;
   authorization: authorization;
   rateLimit: rateLimit;
+  keyType: keyType;
   handler: RequestHandler;
 }
 
 export type method = "get" | "post" | "put" | "patch" | "delete";
 export type authorization = "required" | "optional" | "none";
-export type rateLimit = "strict" | "game" | "read";
+export type rateLimit = "strict" | "gameplay" | "read";
+export type keyType = "ip" | "user" | "default";

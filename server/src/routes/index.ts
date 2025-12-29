@@ -1,4 +1,3 @@
-import express from "express";
 import type { Request, Response } from "express";
 import type { RouterObject } from "../../types/router.js";
 
@@ -8,9 +7,10 @@ const indexRouter: RouterObject = {
   functions: [
     {
       method: "get",
-      authorization: "required",
+      authorization: "none",
       rateLimit: "strict",
-      handler: (req: Request, res: Response) => {
+      keyType: "default",
+      handler: (_req: Request, res: Response) => {
         res.status(200).json({ message: "Works!" });
       },
     },
