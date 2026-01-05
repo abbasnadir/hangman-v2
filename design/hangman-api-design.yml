@@ -2,6 +2,28 @@ openapi: "3.0.3"
 info:
   title: Hangman Backend API
   version: "1.0.1"
+  description: |
+    RESTful API for Hangman game user management.
+
+    ## Authentication
+    All endpoints require JWT Bearer token in Authorization header when authentication is required:
+    ```
+    Authorization: Bearer <your-jwt-token>
+    ```
+
+    ## Rate Limiting
+    Different endpoints have different rate limits per minute:
+    - **Strict operations** (DELETE): 10 requests/minute
+    - **Gameplay operations**: 60 requests/minute
+    - **Read operations** (GET): 300 requests/minute
+    - **Write operations** (PATCH): 60 requests/minute
+
+    When rate limit is exceeded, API returns 429 status code.
+
+    ## Soft Delete
+    Deleted profiles return 404 but data is retained with `deleted_at` timestamp.
+    Valid JWT tokens remain active after profile deletion.
+
 servers:
   - url: https://localhost:5000/
 components:
@@ -10,6 +32,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+
   responses:
     Unauthorized:
       description: Authentication failed/required
@@ -17,24 +40,40 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+          example:
+            code: "UNAUTHORIZED"
+            message: "Invalid or expired authentication token"
+
     NotFound:
       description: Resource not found
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+          example:
+            code: "NOT_FOUND"
+            message: "The requested resource does not exist or has been deleted"
+
     TooManyRequests:
       description: Too many requests
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+          example:
+            code: "RATE_LIMIT_EXCEEDED"
+            message: "Too many requests. Please try again in 60 seconds"
+
     BadRequest:
       description: Invalid request data
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+          example:
+            code: "VALIDATION_ERROR"
+            message: "Invalid input data"
+
   schemas:
     Me:
       type: object
@@ -49,6 +88,8 @@ components:
           format: email
         role:
           type: string
+          enum: ["authenticated", "anon"]
+          example: "authenticated"
     Profile:
       type: object
       required:
@@ -64,23 +105,40 @@ components:
           format: email
         username:
           type: string
+          description: Display name
+          minLength: 3
+          maxLength: 30
+          pattern: "^[a-zA-Z0-9_-]+$"
+          example: "player_12345"
         pfp:
           type: string
+          format: uri
+          description: Profile picture URL
+          maxLength: 2048
+          example: "https://xsyzxrwyabxqsgjyhult.supabase.co/storage/v1/object/public/profile_pictures/default.png"
         status:
           type: string
+          example: "online"
         created_at:
           type: string
           format: date-time
+          description: Profile creation timestamp
+          example: "2026-01-05T10:30:00Z"
+
     Error:
       type: object
+      description: Standard Error Response
       required:
         - code
         - message
       properties:
         code:
           type: string
+          example: "VALIDATION_ERROR"
         message:
           type: string
+          example: "Invalid input data provided"
+
 paths:
   /me:
     get:
@@ -129,8 +187,13 @@ paths:
               properties:
                 username:
                   type: string
+                  minLength: 3
+                  maxLength: 30
+                  pattern: "^[a-zA-Z0-9_-]+$"
                 pfp:
                   type: string
+                  format: uri
+                  maxLength: 2048
                 status:
                   type: string
       responses:
@@ -146,6 +209,12 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          description: Conflict - username already taken
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "429":
           $ref: "#/components/responses/TooManyRequests"
     delete:
