@@ -90,7 +90,7 @@ components:
       description: Display name
       minLength: 3
       maxLength: 30
-      pattern: "^[a-zA-Z0-9_-]+$"
+      pattern: "^[a-zA-Z0-9][a-zA-Z0-9 _-]*[a-zA-Z0-9]$"
       example: "player_12345"
     Pfp:
       type: string
