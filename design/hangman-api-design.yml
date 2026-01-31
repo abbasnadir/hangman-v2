@@ -717,16 +717,23 @@ paths:
 
   /relations/respond:
     post:
-      summary: Accept a relation request by another user
+      summary: Accept/reject a relation request by another user
       security:
         - bearerAuth: []
       parameters:
         - name: id
           in: query
           required: true
-          description: ID of the relation to accept
+          description: ID of the relation to accept/reject
           schema:
             $ref: "#/components/schemas/ID"
+        - name: action
+          in: query
+          required: true
+          description: Action to perform on the request
+          schema:
+            type: string
+            enum: ["accept", "reject"]
       responses:
         "201":
           description: Request sent successfully
@@ -741,23 +748,3 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-    delete:
-      summary: Cancel a request
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: query
-          required: true
-          description: Request ID to delete
-          schema:
-            $ref: "#/components/schemas/ID"
-      responses:
-        "204":
-          description: Request cancelled successfully
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "429":
-          $ref: "#/components/responses/TooManyRequests"
