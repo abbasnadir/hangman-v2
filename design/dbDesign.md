@@ -13,6 +13,7 @@ erDiagram
         TEXT status
         TIMESTAMPTZ created_at
         TIMESTAMPTZ username_updated_at
+        TIMESTAMPTZ pfp_updated_at
         TIMESTAMPTZ deleted_at
     }
 
