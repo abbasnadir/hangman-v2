@@ -1,7 +1,11 @@
 import type { Request, Response } from "express";
 import type { RouterObject } from "../../types/router.js";
 import { supabase } from "../lib/supabaseClient.js";
-import { NotFoundError, UnauthorizedError, BadRequestError } from "../errors/httpErrors.js";
+import {
+  NotFoundError,
+  UnauthorizedError,
+  BadRequestError,
+} from "../errors/httpErrors.js";
 import { validatePfp, validateUsername } from "../utils/validators.js";
 
 /* GET home page. */
@@ -52,13 +56,13 @@ const profileRouter: RouterObject = {
           validateUsername(req);
         }
 
-        if(req.body.pfp) {
+        if (req.body.pfp) {
           validatePfp(req);
         }
 
         Object.keys(updates).forEach((k) => {
           const key = k as keyof typeof updates;
-          if(updates[key] === undefined) delete updates[key];
+          if (updates[key] === undefined) delete updates[key];
         });
 
         if (Object.keys(updates).length === 0) {
@@ -84,6 +88,38 @@ const profileRouter: RouterObject = {
         };
 
         res.status(200).json(user);
+      },
+    },
+    {
+      method: "delete",
+      props: "/",
+      authorization: "required",
+      rateLimit: "strict",
+      keyType: "user",
+      handler: async (req: Request, res: Response) => {
+        const { data: profile, error } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("id", req.user.id)
+          .is("deleted_at", null)
+          .single();
+
+        if (error || !profile) {
+          throw new NotFoundError(error?.message || "User not found");
+        }
+
+        const { error: deleteError } = await supabase
+          .from("profiles")
+          .update({ deleted_at: new Date().toISOString() })
+          .eq("id", req.user.id);
+
+        if (deleteError) {
+          throw new BadRequestError(
+            deleteError.message || "Failed to delete user",
+          );
+        }
+
+        res.status(204).json({ message: "User account deleted successfully" });
       },
     },
   ],
