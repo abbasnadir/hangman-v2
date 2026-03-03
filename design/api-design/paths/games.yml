@@ -1,0 +1,44 @@
+all:
+  get:
+    tags: [Games]
+    operationId: listUserGames
+    summary: List games played by a user
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: query
+        required: true
+        description: ID of the user whose games to fetch
+        schema:
+          $ref: "../components/schemas.yml#/ID"
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 10
+        description: Maximum number of results to return
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+        description: Page number to return
+    responses:
+      "200":
+        description: Games fetched successfully
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yml#/GameData"
+      "400":
+        $ref: "../components/responses.yml#/BadRequest"
+      "401":
+        $ref: "../components/responses.yml#/Unauthorized"
+      "404":
+        $ref: "../components/responses.yml#/NotFound"
+      "429":
+        $ref: "../components/responses.yml#/TooManyRequests"

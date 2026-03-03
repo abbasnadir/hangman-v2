@@ -1,0 +1,115 @@
+openapi: "3.0.3"
+info:
+  title: Hangman Backend API
+  version: "1.0.1"
+  description: |
+    RESTful API for Hangman game user management.
+
+    ## Authentication
+    All endpoints require JWT Bearer token in Authorization header when authentication is required:
+    ```
+    Authorization: Bearer <your-jwt-token>
+    ```
+
+    ## Rate Limiting
+    Different endpoints have different rate limits per minute:
+    - **Strict operations** (DELETE): 10 requests/minute
+    - **Gameplay operations**: 60 requests/minute
+    - **Read operations** (GET): 300 requests/minute
+    - **Write operations** (PATCH): 60 requests/minute
+
+    When rate limit is exceeded, API returns 429 status code.
+
+    ## Soft Delete
+    Deleted profiles return 404 but data is retained with `deleted_at` timestamp.
+    Valid JWT tokens remain active after profile deletion.
+
+servers:
+  - url: https://localhost:5000/
+
+tags:
+  - name: Auth
+    description: Authentication and session endpoints
+  - name: Profiles
+    description: Profile CRUD and search
+  - name: Wordlists
+    description: Wordlist management and discovery
+  - name: Relations
+    description: Friend/request relations endpoints
+  - name: Games
+    description: Game-related endpoints
+
+components:
+  securitySchemes:
+    bearerAuth:
+      $ref: "./components/security-schemes.yml#/bearerAuth"
+
+  schemas:
+    ID:
+      $ref: "./components/schemas.yml#/ID"
+    Username:
+      $ref: "./components/schemas.yml#/Username"
+    Pfp:
+      $ref: "./components/schemas.yml#/Pfp"
+    DateTime:
+      $ref: "./components/schemas.yml#/DateTime"
+    Words:
+      $ref: "./components/schemas.yml#/Words"
+    Lives:
+      $ref: "./components/schemas.yml#/Lives"
+    GameStatus:
+      $ref: "./components/schemas.yml#/GameStatus"
+    GameState:
+      $ref: "./components/schemas.yml#/GameState"
+    Me:
+      $ref: "./components/schemas.yml#/Me"
+    PrivateProfile:
+      $ref: "./components/schemas.yml#/PrivateProfile"
+    PublicProfile:
+      $ref: "./components/schemas.yml#/PublicProfile"
+    ProfileWithStats:
+      $ref: "./components/schemas.yml#/ProfileWithStats"
+    Wordlist:
+      $ref: "./components/schemas.yml#/Wordlist"
+    Request:
+      $ref: "./components/schemas.yml#/Request"
+    GameData:
+      $ref: "./components/schemas.yml#/GameData"
+    Error:
+      $ref: "./components/schemas.yml#/Error"
+
+  responses:
+    Unauthorized:
+      $ref: "./components/responses.yml#/Unauthorized"
+    NotFound:
+      $ref: "./components/responses.yml#/NotFound"
+    TooManyRequests:
+      $ref: "./components/responses.yml#/TooManyRequests"
+    BadRequest:
+      $ref: "./components/responses.yml#/BadRequest"
+
+paths:
+  /me:
+    $ref: "./paths/me.yml#/me"
+  /profile:
+    $ref: "./paths/profile.yml#/profile"
+  /profiles/search:
+    $ref: "./paths/profiles.yml#/search"
+  /profiles/exists:
+    $ref: "./paths/profiles.yml#/exists"
+  /profiles/view:
+    $ref: "./paths/profiles.yml#/view"
+  /wordlists/default:
+    $ref: "./paths/wordlists.yml#/default"
+  /wordlists/search:
+    $ref: "./paths/wordlists.yml#/search"
+  /wordlists/me:
+    $ref: "./paths/wordlists.yml#/me"
+  /relations/me:
+    $ref: "./paths/relations.yml#/me"
+  /relations/request:
+    $ref: "./paths/relations.yml#/request"
+  /relations/respond:
+    $ref: "./paths/relations.yml#/respond"
+  /games/all:
+    $ref: "./paths/games.yml#/all"

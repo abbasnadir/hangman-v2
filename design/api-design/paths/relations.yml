@@ -1,0 +1,121 @@
+me:
+  get:
+    tags: [Relations]
+    operationId: getMyRelations
+    summary: Relations of the authenticated user
+    security:
+      - bearerAuth: []
+    responses:
+      "200":
+        description: Relations fetched successfully
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "../components/schemas.yml#/Request"
+      "400":
+        $ref: "../components/responses.yml#/BadRequest"
+      "401":
+        $ref: "../components/responses.yml#/Unauthorized"
+      "429":
+        $ref: "../components/responses.yml#/TooManyRequests"
+
+request:
+  post:
+    tags: [Relations]
+    operationId: sendRelationRequest
+    summary: Establish relation with another user
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: query
+        required: true
+        description: ID of the user to send request to
+        schema:
+          $ref: "../components/schemas.yml#/ID"
+    responses:
+      "201":
+        description: Request sent successfully
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yml#/Request"
+      "400":
+        $ref: "../components/responses.yml#/BadRequest"
+      "401":
+        $ref: "../components/responses.yml#/Unauthorized"
+      "404":
+        $ref: "../components/responses.yml#/NotFound"
+      "409":
+        description: You've sent a request to this user recently, please wait before sending another
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "../components/schemas.yml#/Error"
+                - type: object
+                  properties:
+                    last_request:
+                      description: Date when relation was last requested
+                      $ref: "../components/schemas.yml#/DateTime"
+  delete:
+    tags: [Relations]
+    operationId: cancelRelationRequest
+    summary: Cancel a request
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: query
+        required: true
+        description: Request ID to cancel
+        schema:
+          $ref: "../components/schemas.yml#/ID"
+    responses:
+      "204":
+        description: Request cancelled successfully
+      "401":
+        $ref: "../components/responses.yml#/Unauthorized"
+      "404":
+        $ref: "../components/responses.yml#/NotFound"
+      "429":
+        $ref: "../components/responses.yml#/TooManyRequests"
+
+respond:
+  patch:
+    tags: [Relations]
+    operationId: respondRelationRequest
+    summary: Accept/reject a relation request by another user
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: query
+        required: true
+        description: ID of the relation to accept/reject
+        schema:
+          $ref: "../components/schemas.yml#/ID"
+      - name: action
+        in: query
+        required: true
+        description: Action to perform on the request
+        schema:
+          type: string
+          enum: ["accept", "reject"]
+    responses:
+      "201":
+        description: Request responded to successfully
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yml#/Request"
+      "400":
+        $ref: "../components/responses.yml#/BadRequest"
+      "401":
+        $ref: "../components/responses.yml#/Unauthorized"
+      "404":
+        $ref: "../components/responses.yml#/NotFound"
+      "429":
+        $ref: "../components/responses.yml#/TooManyRequests"

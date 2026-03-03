@@ -1,0 +1,101 @@
+search:
+  get:
+    tags: [Profiles]
+    operationId: searchProfiles
+    summary: Search for a specific user profile/username
+    parameters:
+      - name: q
+        in: query
+        required: true
+        description: Search query
+        schema:
+          $ref: "../components/schemas.yml#/Username"
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 10
+        description: Maximum number of results to return
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+        description: Page number to return
+    responses:
+      "200":
+        description: Search results
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                results:
+                  type: array
+                  items:
+                    $ref: "../components/schemas.yml#/PublicProfile"
+      "400":
+        $ref: "../components/responses.yml#/BadRequest"
+      "401":
+        $ref: "../components/responses.yml#/Unauthorized"
+      "429":
+        $ref: "../components/responses.yml#/TooManyRequests"
+
+exists:
+  get:
+    tags: [Profiles]
+    operationId: checkUsernameExists
+    summary: Quick check for if a username exists or not
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: username
+        in: query
+        required: true
+        description: Username to check
+        schema:
+          $ref: "../components/schemas.yml#/Username"
+    responses:
+      "200":
+        description: A boolean indicating if the username exists
+        content:
+          application/json:
+            schema:
+              type: boolean
+      "400":
+        $ref: "../components/responses.yml#/BadRequest"
+      "401":
+        $ref: "../components/responses.yml#/Unauthorized"
+      "429":
+        $ref: "../components/responses.yml#/TooManyRequests"
+
+view:
+  get:
+    tags: [Profiles]
+    operationId: viewProfile
+    summary: View a specific user profile
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: query
+        required: true
+        description: ID of the user to view
+        schema:
+          $ref: "../components/schemas.yml#/ID"
+    responses:
+      "200":
+        description: Stats and profile fetched successfully
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yml#/ProfileWithStats"
+      "400":
+        $ref: "../components/responses.yml#/BadRequest"
+      "401":
+        $ref: "../components/responses.yml#/Unauthorized"
+      "429":
+        $ref: "../components/responses.yml#/TooManyRequests"

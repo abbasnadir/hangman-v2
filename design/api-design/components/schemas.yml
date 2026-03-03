@@ -1,0 +1,230 @@
+ID:
+  type: string
+  format: uuid
+  description: UUID v4 format for Supabase primary keys
+  example: "550e8400-e29b-41d4-a716-446655440000"
+
+Username:
+  type: string
+  description: Display name
+  minLength: 3
+  maxLength: 30
+  pattern: "^[a-zA-Z0-9][a-zA-Z0-9 _-]*[a-zA-Z0-9]$"
+  example: "player_12345"
+
+Pfp:
+  type: string
+  format: uri
+  description: Profile picture URL
+  maxLength: 2048
+  example: "https://xsyzxrwyabxqsgjyhult.supabase.co/storage/v1/object/public/profile_pictures/default.png"
+
+DateTime:
+  type: string
+  format: date-time
+  example: "2026-01-05T10:30:00Z"
+
+Words:
+  type: array
+  description: Formatting of a word allowed to be stored in a wordlist
+  items:
+    type: string
+    minLength: 2
+    maxLength: 250
+    pattern: "^[A-Za-z][a-z]*([- ][A-Za-z][a-z]*)*$"
+    example: "My Word"
+
+Lives:
+  type: number
+  minimum: 3
+  maximum: 20
+
+GameStatus:
+  type: string
+  enum: ["won", "lost", "abandoned"]
+
+GameState:
+  type: object
+  description: State of a game at a particular instance
+  required:
+    - total_lives
+  properties:
+    total_lives:
+      $ref: "#/Lives"
+    remaining_lives:
+      $ref: "#/Lives"
+    status:
+      $ref: "#/GameStatus"
+    gamemode:
+      type: string
+    created_at:
+      $ref: "#/DateTime"
+    started_at:
+      $ref: "#/DateTime"
+    finished_at:
+      $ref: "#/DateTime"
+
+Me:
+  type: object
+  required:
+    - id
+  properties:
+    id:
+      type: string
+      format: uuid
+    email:
+      type: string
+      format: email
+    role:
+      type: string
+      enum: ["authenticated", "anon"]
+      example: "authenticated"
+
+# Private profile includes email — only visible to the owner
+PrivateProfile:
+  type: object
+  required:
+    - id
+    - username
+  properties:
+    id:
+      type: string
+      format: uuid
+    email:
+      type: string
+      format: email
+    username:
+      $ref: "#/Username"
+    pfp:
+      $ref: "#/Pfp"
+    status:
+      type: string
+      example: "online"
+    created_at:
+      description: Profile creation timestamp
+      $ref: "#/DateTime"
+
+PublicProfile:
+  type: object
+  required:
+    - id
+    - username
+  properties:
+    id:
+      $ref: "#/ID"
+    username:
+      $ref: "#/Username"
+    pfp:
+      $ref: "#/Pfp"
+    status:
+      type: string
+      example: "online"
+    created_at:
+      description: Profile creation timestamp
+      $ref: "#/DateTime"
+
+ProfileWithStats:
+  allOf:
+    - $ref: "#/PublicProfile"
+    - type: object
+      required:
+        - stats
+      properties:
+        multiplayer_stats:
+          type: object
+          required:
+            - games_played
+            - games_won
+            - games_lost
+          properties:
+            games_played:
+              type: integer
+              example: 24
+            games_won:
+              type: integer
+              example: 12
+            games_lost:
+              type: integer
+              example: 12
+
+Wordlist:
+  type: object
+  description: Wordlist for a game
+  required:
+    - id
+    - owner_id
+    - name
+    - words
+    - created_at
+    - is_public
+  properties:
+    id:
+      $ref: "#/ID"
+    owner_id:
+      $ref: "#/ID"
+    name:
+      type: string
+      example: "@3.,wordlist"
+    words:
+      $ref: "#/Words"
+    created_at:
+      description: Wordlist creation date
+      $ref: "#/DateTime"
+    updated_at:
+      description: When the wordlist was last updated
+      $ref: "#/DateTime"
+    is_public:
+      type: boolean
+
+Request:
+  type: object
+  description: A friend request sent to another user
+  required:
+    - id
+    - requester_id
+    - addressee_id
+    - status
+    - requested_at
+  properties:
+    id:
+      $ref: "#/ID"
+    requester_id:
+      $ref: "#/ID"
+    addressee_id:
+      $ref: "#/ID"
+    status:
+      type: string
+      enum: ["pending", "accepted", "rejected"]
+    requested_at:
+      description: Date when relation was requested
+      $ref: "#/DateTime"
+    accepted_at:
+      description: Date when relation was established
+      $ref: "#/DateTime"
+
+GameData:
+  type: object
+  description: Generic game data sent to user on a normal request
+  required:
+    - id
+  properties:
+    id:
+      $ref: "#/ID"
+    state:
+      $ref: "#/GameState"
+    wordlist:
+      $ref: "#/Wordlist"
+
+Error:
+  type: object
+  description: Standard Error Response
+  required:
+    - code
+    - message
+  properties:
+    code:
+      type: string
+      example: "VALIDATION_ERROR"
+    message:
+      type: string
+      example: "Invalid input data provided"

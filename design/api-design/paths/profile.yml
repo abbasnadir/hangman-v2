@@ -1,0 +1,75 @@
+profile:
+  get:
+    tags: [Profiles]
+    operationId: getOwnProfile
+    summary: View profile of the authenticated user
+    security:
+      - bearerAuth: []
+    responses:
+      "200":
+        description: Profile fetched successfully
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yml#/PrivateProfile"
+      "401":
+        $ref: "../components/responses.yml#/Unauthorized"
+      "404":
+        $ref: "../components/responses.yml#/NotFound"
+      "429":
+        $ref: "../components/responses.yml#/TooManyRequests"
+
+  patch:
+    tags: [Profiles]
+    operationId: updateOwnProfile
+    summary: Update authenticated user profile
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              username:
+                $ref: "../components/schemas.yml#/Username"
+              pfp:
+                $ref: "../components/schemas.yml#/Pfp"
+              status:
+                type: string
+    responses:
+      "200":
+        description: Profile updated successfully
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yml#/PrivateProfile"
+      "400":
+        $ref: "../components/responses.yml#/BadRequest"
+      "401":
+        $ref: "../components/responses.yml#/Unauthorized"
+      "404":
+        $ref: "../components/responses.yml#/NotFound"
+      "409":
+        description: Conflict - username already taken
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yml#/Error"
+      "429":
+        $ref: "../components/responses.yml#/TooManyRequests"
+
+  delete:
+    tags: [Profiles]
+    operationId: deleteOwnProfile
+    summary: Delete authenticated user profile
+    security:
+      - bearerAuth: []
+    responses:
+      "204":
+        description: Profile deleted successfully
+      "401":
+        $ref: "../components/responses.yml#/Unauthorized"
+      "404":
+        $ref: "../components/responses.yml#/NotFound"

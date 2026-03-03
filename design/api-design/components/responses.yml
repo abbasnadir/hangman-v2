@@ -1,0 +1,39 @@
+Unauthorized:
+  description: Authentication failed/required
+  content:
+    application/json:
+      schema:
+        $ref: "./schemas.yml#/Error"
+      example:
+        code: "UNAUTHORIZED"
+        message: "Invalid or expired authentication token"
+
+NotFound:
+  description: Resource not found
+  content:
+    application/json:
+      schema:
+        $ref: "./schemas.yml#/Error"
+      example:
+        code: "NOT_FOUND"
+        message: "The requested resource does not exist or has been deleted"
+
+TooManyRequests:
+  description: Too many requests
+  content:
+    application/json:
+      schema:
+        $ref: "./schemas.yml#/Error"
+      example:
+        code: "RATE_LIMIT_EXCEEDED"
+        message: "Too many requests. Please try again in 60 seconds"
+
+BadRequest:
+  description: Invalid request data
+  content:
+    application/json:
+      schema:
+        $ref: "./schemas.yml#/Error"
+      example:
+        code: "VALIDATION_ERROR"
+        message: "Invalid input data"
