@@ -6,13 +6,17 @@ import {
   UnauthorizedError,
   BadRequestError,
 } from "../errors/httpErrors.js";
-import { validatePfp, validateUsername } from "../utils/validators.js";
+import {
+  fetchUser,
+  validatePfp,
+  validateUsername,
+} from "../utils/validators.js";
 
-/* GET home page. */
 const profileRouter: RouterObject = {
   path: "/profile",
   functions: [
     {
+      /* Fetch the profile of current user */
       method: "get",
       props: "/",
       authorization: "required",
@@ -40,6 +44,7 @@ const profileRouter: RouterObject = {
       },
     },
     {
+      /* Update the info of current user */
       method: "patch",
       props: "/",
       authorization: "required",
@@ -53,7 +58,15 @@ const profileRouter: RouterObject = {
         };
 
         if (req.body.username) {
-          validateUsername(req);
+          validateUsername(req.body.username);
+          const existing = await fetchUser(req.body.username);
+          if (existing && existing.id !== req.user.id) {
+            throw new BadRequestError("Username already taken");
+          }
+
+          if (existing && existing.id === req.user.id) {
+            throw new BadRequestError("Username same as current username.");
+          }
         }
 
         if (req.body.pfp) {
@@ -91,6 +104,7 @@ const profileRouter: RouterObject = {
       },
     },
     {
+      /* Delete the current user */
       method: "delete",
       props: "/",
       authorization: "required",

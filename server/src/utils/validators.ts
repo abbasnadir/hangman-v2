@@ -1,10 +1,26 @@
 import { BadRequestError } from "../errors/httpErrors.js";
 import type { Request, Response } from "express";
-import type { RouterObject } from "../../types/router.js";
 import { supabase } from "../lib/supabaseClient.js";
 
-export async function validateUsername(req: Request) {
-  const username = req.body.username;
+export async function fetchUser(
+  username: string,
+): Promise<{ id: string } | null> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("username", username)
+    .is("deleted_at", null)
+    .single();
+
+  if (error && error.code !== "PGRST116") {
+    //PGRST116 is the error code for "No rows found", which is expected if the username doesn't exist
+    throw error;
+  }
+
+  return data;
+}
+
+export async function validateUsername(username: string) {
   const usernamePattern = /^[a-zA-Z0-9][a-zA-Z0-9 _-]*[a-zA-Z0-9]$/;
 
   if (!usernamePattern.test(username)) {
@@ -19,21 +35,6 @@ export async function validateUsername(req: Request) {
     throw new BadRequestError(
       "Username must not be more than 30 characters long.",
     );
-  }
-
-  const { data: existing } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("username", username)
-    .is("deleted_at", null)
-    .single();
-
-  if (existing && existing.id !== req.user.id) {
-    throw new BadRequestError("Username already taken");
-  }
-
-  if (existing && existing.id === req.user.id) {
-    throw new BadRequestError("Username same as current username.");
   }
 }
 

@@ -64,7 +64,10 @@ exists:
         content:
           application/json:
             schema:
-              type: boolean
+              type: object
+              properties:
+                exists:
+                  type: boolean
       "400":
         $ref: "../components/responses.yml#/BadRequest"
       "401":
