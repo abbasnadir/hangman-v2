@@ -14,7 +14,7 @@ const meRouter: RouterObject = {
       rateLimit: "read",
       keyType: "ip",
       handler: async (req: Request, res: Response) => {
-        const username = req.params.username;
+        const username = req.query.username as string;
 
         if (!username) {
           throw new BadRequestError("Specify a username to see if it exists.");
@@ -27,35 +27,37 @@ const meRouter: RouterObject = {
         res.status(200).json({ exists: !!user });
       },
     },
-    // {
-    //   method: "get",
-    //   props: "/view/:username/",
-    //   authorization: "none",
-    //   rateLimit: "read",
-    //   keyType: "ip",
-    //   handler: async (req: Request, res: Response) => {
-    //     const username = req.params.username;
+    {
+      method: "get",
+      props: "/view/:username/",
+      authorization: "none",
+      rateLimit: "read",
+      keyType: "default",
+      handler: async (req: Request, res: Response) => {
+        const username = req.params.username as string;
 
-    //     if (!username) {
-    //       throw new BadRequestError("Specify a username to fetch the profile.");
-    //     }
+        if (!username) {
+          throw new BadRequestError("Specify a user id to fetch the profile.");
+        }
 
-    //     validateUsername(username);
+        validateUsername(username);
 
-    //     const { data: profile, error } = await supabase
-    //       .from("profiles")
-    //       .select("username, pfp, status, created_at, updated_at")
-    //       .eq("username", username)
-    //       .is("deleted_at", null)
-    //       .single();
+        const { data: profile, error } = await supabase
+          .from("profiles_with_stats")
+          .select(
+            "id, username, pfp, status, created_at, games_played, games_won, games_lost",
+          )
+          .eq("username", username)
+          .is("deleted_at", null)
+          .single();
 
-    //     if (error || !profile) {
-    //       throw new NotFoundError(error.message || "User not found");
-    //     }
+        if (error || !profile) {
+          throw new NotFoundError(error.message || "User not found");
+        }
 
-    //     res.status(200).json(profile);
-    //   },
-    // }
+        res.status(200).json(profile);
+      },
+    },
   ],
 };
 

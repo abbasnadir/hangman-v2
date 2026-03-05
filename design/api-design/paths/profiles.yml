@@ -49,8 +49,6 @@ exists:
     tags: [Profiles]
     operationId: checkUsernameExists
     summary: Quick check for if a username exists or not
-    security:
-      - bearerAuth: []
     parameters:
       - name: username
         in: query
@@ -70,8 +68,6 @@ exists:
                   type: boolean
       "400":
         $ref: "../components/responses.yml#/BadRequest"
-      "401":
-        $ref: "../components/responses.yml#/Unauthorized"
       "429":
         $ref: "../components/responses.yml#/TooManyRequests"
 
@@ -80,11 +76,9 @@ view:
     tags: [Profiles]
     operationId: viewProfile
     summary: View a specific user profile
-    security:
-      - bearerAuth: []
     parameters:
       - name: id
-        in: query
+        in: path
         required: true
         description: ID of the user to view
         schema:
@@ -98,7 +92,7 @@ view:
               $ref: "../components/schemas.yml#/ProfileWithStats"
       "400":
         $ref: "../components/responses.yml#/BadRequest"
-      "401":
-        $ref: "../components/responses.yml#/Unauthorized"
+      "404":
+        $ref: "../components/responses.yml#/NotFound"
       "429":
         $ref: "../components/responses.yml#/TooManyRequests"
