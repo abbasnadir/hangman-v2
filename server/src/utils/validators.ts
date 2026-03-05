@@ -52,3 +52,11 @@ export async function validatePfp(req: Request) {
     throw new BadRequestError("profile URI too long");
   }
 }
+
+export function validateID(id: string) {
+  const uuidPattern =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidPattern.test(id)) {
+    throw new BadRequestError("Invalid ID format");
+  }
+}

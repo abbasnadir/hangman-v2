@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import type { RouterObject } from "../../types/router.js";
 import { BadRequestError, NotFoundError } from "../errors/httpErrors.js";
-import { fetchUser, validateUsername } from "../utils/validators.js";
+import { fetchUser, validateID, validateUsername } from "../utils/validators.js";
 import { supabase } from "../lib/supabaseClient.js";
 
 const meRouter: RouterObject = {
@@ -29,25 +29,25 @@ const meRouter: RouterObject = {
     },
     {
       method: "get",
-      props: "/view/:username/",
+      props: "/view/:id/",
       authorization: "none",
       rateLimit: "read",
       keyType: "default",
       handler: async (req: Request, res: Response) => {
-        const username = req.params.username as string;
+        const id = req.params.id as string;
 
-        if (!username) {
+        if (!id) {
           throw new BadRequestError("Specify a user id to fetch the profile.");
         }
 
-        validateUsername(username);
+        validateID(id);
 
         const { data: profile, error } = await supabase
           .from("profiles_with_stats")
           .select(
             "id, username, pfp, status, created_at, games_played, games_won, games_lost",
           )
-          .eq("username", username)
+          .eq("id", id)
           .is("deleted_at", null)
           .single();
 
