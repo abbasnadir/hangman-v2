@@ -58,6 +58,44 @@ const meRouter: RouterObject = {
         res.status(200).json(profile);
       },
     },
+    {
+      method: "get",
+      props: "/search/",
+      authorization: "required",
+      rateLimit: "read",
+      keyType: "user",
+      handler: async (req: Request, res: Response) => {
+        const query = req.query.q as string;
+        const limit = parseInt((req.query.limit as string) || "10");
+        const page = parseInt((req.query.page as string) || "1");
+
+        if (!query) {
+          throw new BadRequestError("Specify a search query.");
+        }
+
+        if (isNaN(limit) || limit < 1 || limit > 100) {
+          throw new BadRequestError("Limit must be a number between 1 and 100.");
+        }
+
+        if (isNaN(page) || page < 1) {
+          throw new BadRequestError("Page must be a number greater than 0.");
+        }
+
+        const { data: profiles, error } = await supabase
+          .from("profiles")
+          .select("id, username, pfp, status")
+          .ilike("username", `%${query}%`)
+          .is("deleted_at", null)
+          .limit(limit)
+          .range((page - 1) * limit, page * limit - 1);
+
+        if (error) {
+          throw new NotFoundError(error.message || "Error searching for profiles");
+        }
+
+        res.status(200).json(profiles);
+      }
+    }
   ],
 };
 
