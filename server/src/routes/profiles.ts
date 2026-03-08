@@ -4,7 +4,7 @@ import { BadRequestError, NotFoundError } from "../errors/httpErrors.js";
 import { fetchUser, validateID, validateUsername } from "../utils/validators.js";
 import { supabase } from "../lib/supabaseClient.js";
 
-const meRouter: RouterObject = {
+const profilesRouter: RouterObject = {
   path: "/profiles",
   functions: [
     {
@@ -99,4 +99,4 @@ const meRouter: RouterObject = {
   ],
 };
 
-export default meRouter;
+export default profilesRouter;
