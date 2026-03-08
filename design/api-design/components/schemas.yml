@@ -202,8 +202,13 @@ Request:
       description: Date when relation was established
       $ref: "#/DateTime"
     other_user:
-      description: Profile of the other user in the relation (not requester)
-      $ref: "#/PublicProfile"
+      allOf:
+        - $ref: "#/PublicProfile"
+        - type: object
+          properties:
+            deleted_at:
+              description: Date when the other user deleted their account (if applicable)
+              $ref: "#/DateTime"
 
 GameData:
   type: object

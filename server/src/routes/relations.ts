@@ -29,6 +29,7 @@ const relationsRouter: RouterObject = {
               username,
               pfp,
               status,
+              created_at,
               deleted_at
             ),
             addressee:profiles!relationships_addressee_id_fkey (
@@ -36,6 +37,7 @@ const relationsRouter: RouterObject = {
               username,
               pfp,
               status,
+              created_at,
               deleted_at
             )
           `,
@@ -71,6 +73,8 @@ const relationsRouter: RouterObject = {
               username: otherUser?.username,
               pfp: otherUser?.pfp,
               status: otherUser?.status,
+              created_at: otherUser?.created_at,
+              deleted_at: otherUser?.deleted_at,
             },
           };
         });
