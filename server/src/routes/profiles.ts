@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import type { RouterObject } from "../../types/router.js";
 import { BadRequestError, NotFoundError } from "../errors/httpErrors.js";
-import { fetchUser, validateID, validateUsername } from "../utils/validators.js";
+import { fetchUserWithUsername, validateID, validateUsername } from "../utils/validators.js";
 import { supabase } from "../lib/supabaseClient.js";
 
 const profilesRouter: RouterObject = {
@@ -22,7 +22,7 @@ const profilesRouter: RouterObject = {
 
         validateUsername(username);
 
-        const user = await fetchUser(username);
+        const user = await fetchUserWithUsername(username);
 
         res.status(200).json({ exists: !!user });
       },

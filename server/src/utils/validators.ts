@@ -2,13 +2,31 @@ import { BadRequestError } from "../errors/httpErrors.js";
 import type { Request, Response } from "express";
 import { supabase } from "../lib/supabaseClient.js";
 
-export async function fetchUser(
+export async function fetchUserWithUsername(
   username: string,
 ): Promise<{ id: string } | null> {
   const { data, error } = await supabase
     .from("profiles")
     .select("id")
     .eq("username", username)
+    .is("deleted_at", null)
+    .single();
+
+  if (error && error.code !== "PGRST116") {
+    //PGRST116 is the error code for "No rows found", which is expected if the username doesn't exist
+    throw error;
+  }
+
+  return data;
+}
+
+export async function fetchUserWithId(
+  userId: string,
+): Promise<{ id: string } | null> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("id", userId)
     .is("deleted_at", null)
     .single();
 

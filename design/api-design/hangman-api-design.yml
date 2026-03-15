@@ -71,6 +71,14 @@ components:
       $ref: "./components/schemas.yml#/ProfileWithStats"
     Wordlist:
       $ref: "./components/schemas.yml#/Wordlist"
+    RelationStatus:
+      $ref: "./components/schemas.yml#/RelationStatus"
+    Relation:
+      $ref: "./components/schemas.yml#/Relation"
+    RelationRequest:
+      $ref: "./components/schemas.yml#/RelationRequest"
+    RelationConflictError:
+      $ref: "./components/schemas.yml#/RelationConflictError"
     Request:
       $ref: "./components/schemas.yml#/Request"
     GameData:
@@ -107,6 +115,8 @@ paths:
     $ref: "./paths/wordlists.yml#/me"
   /relations/me:
     $ref: "./paths/relations.yml#/me"
+  /relations/request/{id}:
+    $ref: "./paths/relations.yml#/requestById"
   /relations/request:
     $ref: "./paths/relations.yml#/request"
   /relations/respond:

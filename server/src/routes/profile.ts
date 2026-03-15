@@ -7,7 +7,8 @@ import {
   BadRequestError,
 } from "../errors/httpErrors.js";
 import {
-  fetchUser,
+  fetchUserWithUsername,
+  fetchUserWithId,
   validatePfp,
   validateUsername,
 } from "../utils/validators.js";
@@ -59,7 +60,7 @@ const profileRouter: RouterObject = {
 
         if (req.body.username) {
           validateUsername(req.body.username);
-          const existing = await fetchUser(req.body.username);
+          const existing = await fetchUserWithUsername(req.body.username);
           if (existing && existing.id !== req.user.id) {
             throw new BadRequestError("Username already taken");
           }

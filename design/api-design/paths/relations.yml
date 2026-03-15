@@ -13,7 +13,7 @@ me:
             schema:
               type: array
               items:
-                $ref: "../components/schemas.yml#/Request"
+                $ref: "../components/schemas.yml#/Relation"
       "400":
         $ref: "../components/responses.yml#/BadRequest"
       "401":
@@ -21,27 +21,27 @@ me:
       "429":
         $ref: "../components/responses.yml#/TooManyRequests"
 
-request:
+requestById:
   post:
     tags: [Relations]
     operationId: sendRelationRequest
-    summary: Establish relation with another user
+    summary: Send a relation request to another user
     security:
       - bearerAuth: []
     parameters:
       - name: id
-        in: query
+        in: path
         required: true
         description: ID of the user to send request to
         schema:
           $ref: "../components/schemas.yml#/ID"
     responses:
-      "201":
+      "200":
         description: Request sent successfully
         content:
           application/json:
             schema:
-              $ref: "../components/schemas.yml#/Request"
+              $ref: "../components/schemas.yml#/RelationRequest"
       "400":
         $ref: "../components/responses.yml#/BadRequest"
       "401":
@@ -53,13 +53,9 @@ request:
         content:
           application/json:
             schema:
-              allOf:
-                - $ref: "../components/schemas.yml#/Error"
-                - type: object
-                  properties:
-                    last_request:
-                      description: Date when relation was last requested
-                      $ref: "../components/schemas.yml#/DateTime"
+              $ref: "../components/schemas.yml#/RelationConflictError"
+
+request:
   delete:
     tags: [Relations]
     operationId: cancelRelationRequest
@@ -105,12 +101,12 @@ respond:
           type: string
           enum: ["accept", "reject"]
     responses:
-      "201":
+      "200":
         description: Request responded to successfully
         content:
           application/json:
             schema:
-              $ref: "../components/schemas.yml#/Request"
+              $ref: "../components/schemas.yml#/RelationRequest"
       "400":
         $ref: "../components/responses.yml#/BadRequest"
       "401":

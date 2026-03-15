@@ -176,9 +176,42 @@ Wordlist:
     is_public:
       type: boolean
 
-Request:
+RelationStatus:
+  type: string
+  description: State exposed by relations endpoints
+  enum: ["pending", "accepted", "rejected", "new", "deleted"]
+
+Relation:
   type: object
-  description: A friend request sent to another user
+  description: Relation entry returned in the authenticated user's relations list
+  required:
+    - id
+    - status
+    - requested_at
+    - other_user
+  properties:
+    id:
+      $ref: "#/ID"
+    status:
+      $ref: "#/RelationStatus"
+    requested_at:
+      description: Date when relation was requested
+      $ref: "#/DateTime"
+    accepted_at:
+      description: Date when relation was established
+      $ref: "#/DateTime"
+    other_user:
+      allOf:
+        - $ref: "#/PublicProfile"
+        - type: object
+          properties:
+            deleted_at:
+              description: Date when the other user deleted their account (if applicable)
+              $ref: "#/DateTime"
+
+RelationRequest:
+  type: object
+  description: Underlying relationship request record
   required:
     - id
     - requester_id
@@ -201,14 +234,19 @@ Request:
     accepted_at:
       description: Date when relation was established
       $ref: "#/DateTime"
-    other_user:
-      allOf:
-        - $ref: "#/PublicProfile"
-        - type: object
-          properties:
-            deleted_at:
-              description: Date when the other user deleted their account (if applicable)
-              $ref: "#/DateTime"
+
+RelationConflictError:
+  allOf:
+    - $ref: "#/Error"
+    - type: object
+      properties:
+        last_request:
+          description: Date when relation was last requested
+          $ref: "#/DateTime"
+
+Request:
+  allOf:
+    - $ref: "#/RelationRequest"
 
 GameData:
   type: object
