@@ -21,7 +21,7 @@ me:
       "429":
         $ref: "../components/responses.yml#/TooManyRequests"
 
-requestById:
+request:
   post:
     tags: [Relations]
     operationId: sendRelationRequest
@@ -37,6 +37,12 @@ requestById:
           $ref: "../components/schemas.yml#/ID"
     responses:
       "200":
+        description: Request resent successfully (existing rejected relation set back to pending)
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yml#/RelationRequest"
+      "201":
         description: Request sent successfully
         content:
           application/json:
@@ -54,24 +60,30 @@ requestById:
           application/json:
             schema:
               $ref: "../components/schemas.yml#/RelationConflictError"
-
-request:
   delete:
     tags: [Relations]
-    operationId: cancelRelationRequest
-    summary: Cancel a request
+    operationId: deleteOrRejectRelation
+    summary: Cancel/unfriend a relation, or reject an incoming pending request
     security:
       - bearerAuth: []
     parameters:
       - name: id
-        in: query
+        in: path
         required: true
-        description: Request ID to cancel
+        description: User ID involved in the relation
         schema:
           $ref: "../components/schemas.yml#/ID"
     responses:
+      "200":
+        description: Incoming pending request rejected successfully
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yml#/RelationRequest"
       "204":
-        description: Request cancelled successfully
+        description: Request cancelled or relation removed successfully
+      "400":
+        $ref: "../components/responses.yml#/BadRequest"
       "401":
         $ref: "../components/responses.yml#/Unauthorized"
       "404":
@@ -82,27 +94,20 @@ request:
 respond:
   patch:
     tags: [Relations]
-    operationId: respondRelationRequest
-    summary: Accept/reject a relation request by another user
+    operationId: acceptRelationRequest
+    summary: Accept a relation request by another user
     security:
       - bearerAuth: []
     parameters:
       - name: id
-        in: query
+        in: path
         required: true
-        description: ID of the relation to accept/reject
+        description: Requester user ID whose pending request should be accepted
         schema:
           $ref: "../components/schemas.yml#/ID"
-      - name: action
-        in: query
-        required: true
-        description: Action to perform on the request
-        schema:
-          type: string
-          enum: ["accept", "reject"]
     responses:
       "200":
-        description: Request responded to successfully
+        description: Request accepted successfully
         content:
           application/json:
             schema:
