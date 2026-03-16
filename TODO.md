@@ -2,19 +2,22 @@
 
 ## Setup
 
-- [X] Setup error handling for production and deployment in server
-- [X] Setup client
-- [X] Database
+- [x] Setup error handling for production and deployment in server
+- [x] Setup client
+- [x] Database
 
 ## Prototype
 
 - [ ] Design API endpoints
-- - [X] Create a mock `/me` path
-- - - [X] Design the endpoint in openAPI
-- - - [X] Test it in postman
-- [ ] Test profiles api and profile apis and create tests
-- [X] Database structure
-- [X] List Features
+- - [x] Create a mock `/me` path
+- - - [x] Design the endpoint in openAPI
+- - - [x] Test it in postman
+- - [ ] Test profiles api and profile apis and create tests
+- - [ ] Test Relations apis
+- - [ ] Document the code using comments for better readability
+- - [ ] Finish the design and implementation of other endpoints
+- [x] Database structure
+- [x] List Features
 - [ ] Update Readme
 
 ## Develop
@@ -27,4 +30,5 @@
 - [ ] Handle unauthorised users
 
 ## Optional
+
 - [ ] Use jwks to rotate the supabase signing key automatically.
