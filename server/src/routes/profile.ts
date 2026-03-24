@@ -7,11 +7,18 @@ import {
   BadRequestError,
 } from "../errors/httpErrors.js";
 import {
-  fetchUserWithUsername,
-  fetchUserWithId,
+  fetchProfileUpdateContext,
   validatePfp,
   validateUsername,
 } from "../utils/validators.js";
+
+interface ProfileUpdates {
+  username: string;
+  pfp: string | null;
+  status: string | null;
+  username_updated_at?: string | null;
+  pfp_updated_at?: string | null;
+}
 
 const profileRouter: RouterObject = {
   path: "/profile",
@@ -26,7 +33,9 @@ const profileRouter: RouterObject = {
       handler: async (req: Request, res: Response) => {
         const { data: profile, error } = await supabase
           .from("profiles")
-          .select("username, pfp, status, created_at, updated_at")
+          .select(
+            "username, pfp, status, created_at, username_updated_at, pfp_updated_at",
+          )
           .eq("id", req.user.id)
           .is("deleted_at", null)
           .single();
@@ -52,7 +61,7 @@ const profileRouter: RouterObject = {
       rateLimit: "strict",
       keyType: "user",
       handler: async (req: Request, res: Response) => {
-        const updates = {
+        const updates: ProfileUpdates = {
           username: req.body.username,
           pfp: req.body.pfp,
           status: req.body.status,
@@ -60,18 +69,45 @@ const profileRouter: RouterObject = {
 
         if (req.body.username) {
           validateUsername(req.body.username);
-          const existing = await fetchUserWithUsername(req.body.username);
-          if (existing && existing.id !== req.user.id) {
+        }
+
+        const { currentProfile, usernameOwner } =
+          await fetchProfileUpdateContext(req.user.id, req.body.username);
+
+        if (!currentProfile) {
+          throw new NotFoundError("User not found");
+        }
+
+        if (req.body.username) {
+          if (usernameOwner && usernameOwner.id !== req.user.id) {
             throw new BadRequestError("Username already taken");
           }
 
-          if (existing && existing.id === req.user.id) {
+          if (req.body.username === currentProfile.username) {
             throw new BadRequestError("Username same as current username.");
           }
+
+          if (currentProfile.username_updated_at) {
+            const lastUpdated = new Date(
+              currentProfile.username_updated_at,
+            ).getTime();
+            const now = Date.now();
+            const diffInHours = (now - lastUpdated) / (1000 * 60 * 60);
+
+            if (diffInHours < 12) {
+              throw new BadRequestError(
+                `Username can only be changed once every 12 hours. Please try again in ${Math.ceil(12 - diffInHours)} hour(s).`,
+              );
+            }
+          }
+
+          updates.username_updated_at = new Date().toISOString();
         }
 
         if (req.body.pfp) {
           validatePfp(req);
+
+          updates.pfp_updated_at = new Date().toISOString();
         }
 
         Object.keys(updates).forEach((k) => {
@@ -88,7 +124,9 @@ const profileRouter: RouterObject = {
           .update(updates)
           .eq("id", req.user.id)
           .is("deleted_at", null)
-          .select("username, pfp, status, created_at")
+          .select(
+            "username, pfp, status, created_at, username_updated_at, pfp_updated_at",
+          )
           .single();
 
         if (error || !profile) {
