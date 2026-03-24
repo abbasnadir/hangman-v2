@@ -62,9 +62,9 @@ const profileRouter: RouterObject = {
       keyType: "user",
       handler: async (req: Request, res: Response) => {
         const updates: ProfileUpdates = {
-          username: req.body.username,
-          pfp: req.body.pfp,
-          status: req.body.status,
+          username: req.body.username ?? undefined,
+          pfp: req.body.pfp ?? null,
+          status: req.body.status ?? null,
         };
 
         if (req.body.username) {

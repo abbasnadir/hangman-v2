@@ -12,8 +12,9 @@
 - - [x] Create a mock `/me` path
 - - - [x] Design the endpoint in openAPI
 - - - [x] Test it in postman
-- - [X] Test profiles api and profile apis and create tests
-- - [X] Test Relations apis
+- - [ ] Test profiles api and profile apis and create tests
+- - [ ] Test Relations apis
+- - - [ ] Fix empty string issues in the api endpoint
 - - [ ] Document the code using comments for better readability
 - - [ ] Finish the design and implementation of other endpoints
 - [x] Database structure

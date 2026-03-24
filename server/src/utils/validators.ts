@@ -84,14 +84,15 @@ export async function fetchProfileUpdateContext(
 
   return {
     currentProfile: data.find((profile) => profile.id === userId) ?? null,
-    usernameOwner: data.find((profile) => profile.username === username) ?? null,
+    usernameOwner:
+      data.find((profile) => profile.username === username) ?? null,
   };
 }
 
 export async function validateUsername(username: string) {
   const usernamePattern = /^[a-zA-Z0-9][a-zA-Z0-9 _-]*[a-zA-Z0-9]$/;
 
-  if (!usernamePattern.test(username)) {
+  if (!usernamePattern.test(username) || username.trim() === "") {
     throw new BadRequestError("Invalid username format");
   }
 
@@ -111,7 +112,8 @@ export async function validatePfp(req: Request) {
     !req.body.pfp.startsWith(
       process.env.SUPABASE_URL +
         `/storage/v1/object/public/profile_pictures/${req.user.id}`,
-    )
+    ) ||
+    req.body.pfp.trim() === ""
   ) {
     throw new BadRequestError("Invalid pfp url");
   }
