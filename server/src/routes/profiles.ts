@@ -1,7 +1,8 @@
 import type { Request, Response } from "express";
 import type { RouterObject } from "../../types/router.js";
 import { BadRequestError, NotFoundError } from "../errors/httpErrors.js";
-import { fetchUserWithUsername, validateID, validateUsername } from "../utils/validators.js";
+import { validateID, validateUsername } from "../utils/validators.js";
+import { fetchUserWithUsername } from "../utils/dbQueries.js";
 import { supabase } from "../lib/supabaseClient.js";
 
 const profilesRouter: RouterObject = {
@@ -74,7 +75,9 @@ const profilesRouter: RouterObject = {
         }
 
         if (isNaN(limit) || limit < 1 || limit > 100) {
-          throw new BadRequestError("Limit must be a number between 1 and 100.");
+          throw new BadRequestError(
+            "Limit must be a number between 1 and 100.",
+          );
         }
 
         if (isNaN(page) || page < 1) {
@@ -90,12 +93,14 @@ const profilesRouter: RouterObject = {
           .range((page - 1) * limit, page * limit - 1);
 
         if (error) {
-          throw new NotFoundError(error.message || "Error searching for profiles");
+          throw new NotFoundError(
+            error.message || "Error searching for profiles",
+          );
         }
 
         res.status(200).json(profiles);
-      }
-    }
+      },
+    },
   ],
 };
 

@@ -6,11 +6,9 @@ import {
   UnauthorizedError,
   BadRequestError,
 } from "../errors/httpErrors.js";
-import {
-  fetchProfileUpdateContext,
-  validatePfp,
-  validateUsername,
-} from "../utils/validators.js";
+import { validatePfp, validateUsername } from "../utils/validators.js";
+
+import { fetchProfileUpdateContext } from "../utils/dbQueries.js";
 
 interface ProfileUpdates {
   username: string;
@@ -105,7 +103,7 @@ const profileRouter: RouterObject = {
         }
 
         if (req.body.pfp) {
-          validatePfp(req);
+          validatePfp(req.body.pfp, req.user.id);
 
           updates.pfp_updated_at = new Date().toISOString();
         }
