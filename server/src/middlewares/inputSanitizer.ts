@@ -1,9 +1,9 @@
-import type { AnyZodObject } from "zod/v3";
+import type { ZodObject } from "zod";
 import type { NextFunction, Request, Response } from "express";
 import { BadRequestError } from "../errors/httpErrors.js";
 
 export const validate =
-  (zodSchema?: AnyZodObject) =>
+  (zodSchema?: ZodObject) =>
   async (req: Request, res: Response, next: NextFunction) => {
     if (!zodSchema) return next();
 
@@ -22,9 +22,9 @@ export const validate =
       );
     }
 
-    req.body = result.data.body;
-    req.params = result.data.params;
-    req.query = result.data.query;
+    if (result.data.body) res.locals.body = result.data.body;
+    if (result.data.params) res.locals.params = result.data.params;
+    if (result.data.query) res.locals.query = result.data.query;
 
     next();
   };

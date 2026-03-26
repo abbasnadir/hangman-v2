@@ -1,5 +1,5 @@
 import type { RequestHandler } from "express";
-import type { AnyZodObject } from "zod/v3";
+import type { ZodObject } from "zod";
 
 export interface RouterObject {
   path: string;
@@ -12,7 +12,7 @@ export interface APIObject {
   authorization: authorization;
   rateLimit: rateLimit;
   keyType: keyType;
-  zodSchema?: AnyZodObject;
+  zodSchema?: ZodObject;
   handler: RequestHandler;
 }
 

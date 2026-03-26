@@ -1,22 +1,27 @@
 import type { Request, Response } from "express";
 import type { RouterObject } from "../../types/router.js";
 import { supabase } from "../lib/supabaseClient.js";
-import {
-  NotFoundError,
-  UnauthorizedError,
-  BadRequestError,
-} from "../errors/httpErrors.js";
-import { validatePfp, validateUsername } from "../utils/validators.js";
+import { NotFoundError, BadRequestError } from "../errors/httpErrors.js";
+import { z } from "zod";
 
 import { fetchProfileUpdateContext } from "../utils/dbQueries.js";
+import {
+  pfpValueSchema,
+  statusValueSchema,
+  usernameValueSchema,
+} from "../schemas/common.schemas.js";
 
 interface ProfileUpdates {
-  username: string;
-  pfp: string | null;
-  status: string | null;
+  username?: string;
+  pfp?: string | null;
+  status?: string | null;
   username_updated_at?: string | null;
   pfp_updated_at?: string | null;
 }
+
+const DEFAULT_PROFILE_PICTURE =
+  process.env.SUPABASE_URL +
+  "/storage/v1/object/public/profile_pictures/default.png";
 
 const profileRouter: RouterObject = {
   path: "/profile",
@@ -58,30 +63,36 @@ const profileRouter: RouterObject = {
       authorization: "required",
       rateLimit: "strict",
       keyType: "user",
+      zodSchema: z.object({
+        body: z
+          .object({
+            username: usernameValueSchema.optional(),
+            pfp: z.union([z.literal(""), pfpValueSchema]).optional(),
+            status: statusValueSchema.nullable().optional(),
+          })
+          .strict(),
+      }),
       handler: async (req: Request, res: Response) => {
-        const updates: ProfileUpdates = {
-          username: req.body.username ?? undefined,
-          pfp: req.body.pfp ?? null,
-          status: req.body.status ?? null,
+        const body = res.locals.body as {
+          username?: string;
+          pfp?: string;
+          status?: string | null;
         };
-
-        if (req.body.username) {
-          validateUsername(req.body.username);
-        }
+        const updates: ProfileUpdates = {};
 
         const { currentProfile, usernameOwner } =
-          await fetchProfileUpdateContext(req.user.id, req.body.username);
+          await fetchProfileUpdateContext(req.user.id, body.username);
 
         if (!currentProfile) {
           throw new NotFoundError("User not found");
         }
 
-        if (req.body.username) {
+        if (body.username !== undefined) {
           if (usernameOwner && usernameOwner.id !== req.user.id) {
             throw new BadRequestError("Username already taken");
           }
 
-          if (req.body.username === currentProfile.username) {
+          if (body.username === currentProfile.username) {
             throw new BadRequestError("Username same as current username.");
           }
 
@@ -99,27 +110,34 @@ const profileRouter: RouterObject = {
             }
           }
 
+          updates.username = body.username;
           updates.username_updated_at = new Date().toISOString();
         }
 
-        if (req.body.pfp) {
-          validatePfp(req.body.pfp, req.user.id);
+        if (body.pfp !== undefined) {
+          updates.pfp = body.pfp === "" ? DEFAULT_PROFILE_PICTURE : body.pfp;
 
+          if (body.pfp !== "") {
+            if (
+              !body.pfp.startsWith(
+                process.env.SUPABASE_URL +
+                  `/storage/v1/object/public/profile_pictures/${req.user.id}`,
+              )
+            ) {
+              throw new BadRequestError(
+                "Profile picture must be stored in the game storage",
+              );
+            }
+          }
           updates.pfp_updated_at = new Date().toISOString();
         }
 
-        if(req.body.pfp === "") {
-          updates.pfp = 'https://xsyzxrwyabxqsgjyhult.supabase.co/storage/v1/object/public/profile_pictures/default.png';
-          updates.pfp_updated_at = new Date().toISOString();
+        if (body.status !== undefined) {
+          updates.status = body.status;
         }
-
-        Object.keys(updates).forEach((k) => {
-          const key = k as keyof typeof updates;
-          if (!updates[key]) delete updates[key];
-        });
 
         if (Object.keys(updates).length === 0) {
-          throw new UnauthorizedError("No fields to update");
+          throw new BadRequestError("No fields to update");
         }
 
         const { data: profile, error } = await supabase
@@ -170,9 +188,7 @@ const profileRouter: RouterObject = {
           .eq("id", req.user.id);
 
         if (deleteError) {
-          throw new BadRequestError(
-            "Failed to delete user",
-          );
+          throw new BadRequestError("Failed to delete user");
         }
 
         res.status(204).json({ message: "User account deleted successfully" });

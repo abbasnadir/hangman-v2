@@ -1,9 +1,14 @@
 import type { Request, Response } from "express";
 import type { RouterObject } from "../../types/router.js";
-import { BadRequestError, NotFoundError } from "../errors/httpErrors.js";
-import { validateID, validateUsername } from "../utils/validators.js";
+import { NotFoundError } from "../errors/httpErrors.js";
 import { fetchUserWithUsername } from "../utils/dbQueries.js";
 import { supabase } from "../lib/supabaseClient.js";
+import { z } from "zod";
+import {
+  querySearchSchema,
+  usernameSchema,
+  idSchema,
+} from "../schemas/common.schemas.js";
 
 const profilesRouter: RouterObject = {
   path: "/profiles",
@@ -14,14 +19,9 @@ const profilesRouter: RouterObject = {
       authorization: "none",
       rateLimit: "read",
       keyType: "ip",
+      zodSchema: z.object({ query: usernameSchema }),
       handler: async (req: Request, res: Response) => {
-        const username = req.query.username as string;
-
-        if (!username) {
-          throw new BadRequestError("Specify a username to see if it exists.");
-        }
-
-        validateUsername(username);
+        const username: string = res.locals.query.username;
 
         const user = await fetchUserWithUsername(username);
 
@@ -34,14 +34,9 @@ const profilesRouter: RouterObject = {
       authorization: "none",
       rateLimit: "read",
       keyType: "default",
+      zodSchema: z.object({ params: idSchema }),
       handler: async (req: Request, res: Response) => {
-        const id = req.params.id as string;
-
-        if (!id) {
-          throw new BadRequestError("Specify a user id to fetch the profile.");
-        }
-
-        validateID(id);
+        const id = res.locals.params.id;
 
         const { data: profile, error } = await supabase
           .from("profiles_with_stats")
@@ -64,24 +59,11 @@ const profilesRouter: RouterObject = {
       authorization: "required",
       rateLimit: "read",
       keyType: "user",
+      zodSchema: z.object({ query: querySearchSchema }),
       handler: async (req: Request, res: Response) => {
-        const query = req.query.q as string;
-        const limit = parseInt((req.query.limit as string) || "10");
-        const page = parseInt((req.query.page as string) || "1");
-
-        if (!query) {
-          throw new BadRequestError("Specify a search query.");
-        }
-
-        if (isNaN(limit) || limit < 1 || limit > 100) {
-          throw new BadRequestError(
-            "Limit must be a number between 1 and 100.",
-          );
-        }
-
-        if (isNaN(page) || page < 1) {
-          throw new BadRequestError("Page must be a number greater than 0.");
-        }
+        const query: string = res.locals.query.q;
+        const limit: number = res.locals.query.limit;
+        const page: number = res.locals.query.page;
 
         const { data: profiles, error } = await supabase
           .from("profiles")
@@ -92,9 +74,7 @@ const profilesRouter: RouterObject = {
           .range((page - 1) * limit, page * limit - 1);
 
         if (error) {
-          throw new NotFoundError(
-            "Error searching for profiles",
-          );
+          throw new NotFoundError("Error searching for profiles");
         }
 
         res.status(200).json(profiles);
