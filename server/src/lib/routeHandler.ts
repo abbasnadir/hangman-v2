@@ -6,6 +6,7 @@ import { tryCatch } from "../utils/tryCatch.js";
 import type { RouterObject } from "../../types/router.js";
 import { authHandler } from "./auth.js";
 import { rateLimiter } from "./rateLimiter.js";
+import { validate } from "../middlewares/inputSanitizer.js";
 
 export async function routesHandler(): Promise<Router> {
   const parentDir = path.join(import.meta.dirname, "../routes");
@@ -32,7 +33,8 @@ export async function routesHandler(): Promise<Router> {
           fullPath,
           authHandler(obj.authorization),
           rateLimiter.limit(obj.rateLimit, obj.keyType),
-          tryCatch(obj.handler)
+          validate(obj.zodSchema),
+          tryCatch(obj.handler),
         );
       }
     }
