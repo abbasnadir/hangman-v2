@@ -39,7 +39,7 @@ const profileRouter: RouterObject = {
           .single();
 
         if (error || !profile) {
-          throw new NotFoundError(error.message || "User not found");
+          throw new NotFoundError("User not found");
         }
 
         const user = {
@@ -108,9 +108,14 @@ const profileRouter: RouterObject = {
           updates.pfp_updated_at = new Date().toISOString();
         }
 
+        if(req.body.pfp === "") {
+          updates.pfp = 'https://xsyzxrwyabxqsgjyhult.supabase.co/storage/v1/object/public/profile_pictures/default.png';
+          updates.pfp_updated_at = new Date().toISOString();
+        }
+
         Object.keys(updates).forEach((k) => {
           const key = k as keyof typeof updates;
-          if (updates[key] === undefined) delete updates[key];
+          if (!updates[key]) delete updates[key];
         });
 
         if (Object.keys(updates).length === 0) {
@@ -128,7 +133,7 @@ const profileRouter: RouterObject = {
           .single();
 
         if (error || !profile) {
-          throw new NotFoundError(error?.message || "User not found");
+          throw new NotFoundError("User not found");
         }
 
         const user = {
@@ -156,7 +161,7 @@ const profileRouter: RouterObject = {
           .single();
 
         if (error || !profile) {
-          throw new NotFoundError(error?.message || "User not found");
+          throw new NotFoundError("User not found");
         }
 
         const { error: deleteError } = await supabase
@@ -166,7 +171,7 @@ const profileRouter: RouterObject = {
 
         if (deleteError) {
           throw new BadRequestError(
-            deleteError.message || "Failed to delete user",
+            "Failed to delete user",
           );
         }
 

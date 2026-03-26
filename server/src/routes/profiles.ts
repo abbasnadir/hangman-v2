@@ -49,11 +49,10 @@ const profilesRouter: RouterObject = {
             "id, username, pfp, status, created_at, games_played, games_won, games_lost",
           )
           .eq("id", id)
-          .is("deleted_at", null)
           .single();
 
         if (error || !profile) {
-          throw new NotFoundError(error.message || "User not found");
+          throw new NotFoundError("User not found");
         }
 
         res.status(200).json(profile);
@@ -94,7 +93,7 @@ const profilesRouter: RouterObject = {
 
         if (error) {
           throw new NotFoundError(
-            error.message || "Error searching for profiles",
+            "Error searching for profiles",
           );
         }
 

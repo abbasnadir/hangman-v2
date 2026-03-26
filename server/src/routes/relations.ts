@@ -2,8 +2,8 @@ import type { Request, Response } from "express";
 import type { RouterObject } from "../../types/router.js";
 import { supabase } from "../lib/supabaseClient.js";
 import { BadRequestError, NotFoundError } from "../errors/httpErrors.js";
-import { fetchUserWithId, validateID } from "../utils/validators.js";
-import { stat } from "fs";
+import { validateID } from "../utils/validators.js";
+import { fetchUserWithId } from "../utils/dbQueries.js";
 
 /* GET home page. */
 const relationsRouter: RouterObject = {
@@ -50,7 +50,7 @@ const relationsRouter: RouterObject = {
 
         // Error here likely means the user has no relations
         if (error) {
-          throw new NotFoundError(error.message || "No relations found");
+          throw new NotFoundError("No relations found");
         }
 
         // Map the relations to include the other user's data and filter out deleted users and relations.
@@ -181,9 +181,7 @@ const relationsRouter: RouterObject = {
                 .single();
 
               if (error || !newRelation) {
-                throw new BadRequestError(
-                  error?.message || "Failed to send friend request.",
-                );
+                throw new BadRequestError("Failed to send friend request.");
               }
 
               res.status(200).json(newRelation);
@@ -236,7 +234,10 @@ const relationsRouter: RouterObject = {
             "No friend request found between you and this user.",
           );
         }
-        if(relation.status === "pending" && relation.requester_id !== req.user.id) {
+        if (
+          relation.status === "pending" &&
+          relation.requester_id !== req.user.id
+        ) {
           const { data, error: updateError } = await supabase
             .from("relationships")
             .update({
@@ -248,9 +249,7 @@ const relationsRouter: RouterObject = {
             .single();
 
           if (updateError || !data) {
-            throw new BadRequestError(
-              updateError?.message || "Failed to reject friend request.",
-            );
+            throw new BadRequestError("Failed to reject friend request.");
           }
           res.status(200).json(data);
           return;
@@ -275,9 +274,7 @@ const relationsRouter: RouterObject = {
         const id = req.params.id as string;
 
         if (!id) {
-          throw new BadRequestError(
-            "Specify a user id.",
-          );
+          throw new BadRequestError("Specify a user id.");
         }
 
         validateID(id);
@@ -299,7 +296,7 @@ const relationsRouter: RouterObject = {
           );
         }
 
-        const {data, error: updateError} = await supabase
+        const { data, error: updateError } = await supabase
           .from("relationships")
           .update({
             status: "accepted",
@@ -310,9 +307,7 @@ const relationsRouter: RouterObject = {
           .single();
 
         if (updateError || !data) {
-          throw new BadRequestError(
-            updateError?.message || "Failed to respond to friend request.",
-          );
+          throw new BadRequestError("Failed to respond to friend request.");
         }
 
         res.status(200).json(data);
