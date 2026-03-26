@@ -2,8 +2,10 @@ import type { Request, Response } from "express";
 import type { RouterObject } from "../../types/router.js";
 import { supabase } from "../lib/supabaseClient.js";
 import { BadRequestError, NotFoundError } from "../errors/httpErrors.js";
-import { validateID } from "../utils/validators.js";
+import { z } from "zod";
+
 import { fetchUserWithId } from "../utils/dbQueries.js";
+import { idSchema } from "../schemas/common.schemas.js";
 
 /* GET home page. */
 const relationsRouter: RouterObject = {
@@ -105,17 +107,10 @@ const relationsRouter: RouterObject = {
       authorization: "required",
       rateLimit: "strict",
       keyType: "user",
+      zodSchema: z.object({ params: idSchema }),
       handler: async (req: Request, res: Response) => {
-        const id = req.params.id as string;
+        const id: string = res.locals.params.id;
 
-        // Validate the id and check if the user exists
-        if (!id) {
-          throw new BadRequestError(
-            "Specify a user id to send a friend request.",
-          );
-        }
-
-        validateID(id);
         const user = await fetchUserWithId(id);
 
         if (!user) {
@@ -210,16 +205,9 @@ const relationsRouter: RouterObject = {
       authorization: "required",
       rateLimit: "strict",
       keyType: "user",
+      zodSchema: z.object({ params: idSchema }),
       handler: async (req: Request, res: Response) => {
-        const id = req.params.id as string;
-
-        if (!id) {
-          throw new BadRequestError(
-            "Specify a user id to cancel the friend request.",
-          );
-        }
-
-        validateID(id);
+        const id: string = res.locals.params.id;
 
         const { data: relation, error } = await supabase
           .from("relationships")
@@ -270,14 +258,9 @@ const relationsRouter: RouterObject = {
       authorization: "required",
       rateLimit: "strict",
       keyType: "user",
+      zodSchema: z.object({ params: idSchema }),
       handler: async (req: Request, res: Response) => {
-        const id = req.params.id as string;
-
-        if (!id) {
-          throw new BadRequestError("Specify a user id.");
-        }
-
-        validateID(id);
+        const id: string = res.locals.params.id;
 
         const { data: relation, error } = await supabase
           .from("relationships")

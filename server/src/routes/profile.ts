@@ -191,7 +191,7 @@ const profileRouter: RouterObject = {
           throw new BadRequestError("Failed to delete user");
         }
 
-        res.status(204).json({ message: "User account deleted successfully" });
+        res.sendStatus(204);
       },
     },
   ],
