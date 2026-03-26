@@ -18,7 +18,7 @@
 - - - [X] Fix empty string issues in the api endpoint
 - - [ ] Document the code using comments for better readability
 - - [ ] Finish the design and implementation of other endpoints
-- [ ] Set up zod
+- [X] Set up zod
 - [x] Database structure
 - [x] List Features
 - [ ] Update Readme
