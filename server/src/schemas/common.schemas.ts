@@ -61,3 +61,13 @@ export const querySearchSchema = z.object({
     .min(1, "Page must be a positive integer")
     .default(1),
 });
+
+export const reasonableWordSchema = z
+  .string("Word must be a string")
+  .trim()
+  .regex(
+    /^[A-Za-z]+([ -][A-Za-z]+)*$/,
+    "Word can only contain letters, spaces and hyphens",
+  )
+  .min(2, "Word must be at least 2 letters long.")
+  .max(20, "Word must be at most 20 letters long.");

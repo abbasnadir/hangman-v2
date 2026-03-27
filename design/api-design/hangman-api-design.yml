@@ -116,8 +116,6 @@ paths:
   /relations/me:
     $ref: "./paths/relations.yml#/me"
   /relations/request/{id}:
-    $ref: "./paths/relations.yml#/requestById"
-  /relations/request:
     $ref: "./paths/relations.yml#/request"
   /relations/respond:
     $ref: "./paths/relations.yml#/respond"

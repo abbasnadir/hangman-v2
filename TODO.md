@@ -12,17 +12,20 @@
 - - [x] Create a mock `/me` path
 - - - [x] Design the endpoint in openAPI
 - - - [x] Test it in postman
-- - [X] Test profiles api and profile apis
+- - [x] Test profiles api and profile apis
 - - - [ ] create tests
-- - [X] Test Relations apis
-- - - [X] Fix empty string issues in the api endpoint
+- - [x] Test Relations apis
+- - - [x] Fix empty string issues in the api endpoint
+- - [ ] Test wordlists and games API endpoints
 - - [ ] Document the code using comments for better readability
 - - [ ] Finish the design and implementation of other endpoints
-- [X] Set up zod
+- [x] Set up zod
 - [x] Database structure
 - [x] List Features
 - [ ] Update Readme
 - [ ] Create an actual delete endpoint, current delete endpoint is just a deactivation endpoint
+- [ ] Do something about deleted/deactivated accounts still being able to browse the app.
+- [ ] Fix typescript not able to parse zod objects/detect them properly
 
 ## Develop
 
