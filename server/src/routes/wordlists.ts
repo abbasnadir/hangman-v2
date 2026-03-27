@@ -1,7 +1,7 @@
 import type { RouterObject } from "../../types/router.js";
 import type { Request, Response } from "express";
 import { supabase } from "../lib/supabaseClient.js";
-import { BadRequestError } from "../errors/httpErrors.js";
+import { BadRequestError, NotFoundError } from "../errors/httpErrors.js";
 import z from "zod";
 import {
   idValueSchema,
@@ -24,11 +24,15 @@ const wordlistsRouter: RouterObject = {
           .from("wordlists")
           .select("name, words, id")
           .eq("default", true)
-          .eq("public", true);
+          .eq("is_public", true);
 
-        if (error) {
+        if (error && error.code !== "PGRST116") {
           throw new BadRequestError(error.message);
         }
+        if (!wordlists || wordlists.length === 0) {
+          throw new NotFoundError("No wordlists found.");
+        }
+
         res.status(200).json(wordlists);
       },
     },
@@ -48,12 +52,15 @@ const wordlistsRouter: RouterObject = {
           .from("wordlists")
           .select("owner_id, name, words, created_at, updated_at, default, id")
           .ilike("name", `%${query}%`)
-          .is("public", true)
+          .eq("is_public", true)
           .limit(limit)
           .range((page - 1) * limit, page * limit - 1);
 
-        if (error) {
+        if (error && error.code !== "PGRST116") {
           throw new BadRequestError(error.message);
+        }
+        if (!wordlists || wordlists.length === 0) {
+          throw new NotFoundError("No wordlists found.");
         }
 
         res.status(200).json(wordlists);
@@ -73,8 +80,11 @@ const wordlistsRouter: RouterObject = {
           )
           .eq("owner_id", req.user.id);
 
-        if (error) {
+        if (error && error.code !== "PGRST116") {
           throw new BadRequestError(error.message);
+        }
+        if (!wordlists || wordlists.length === 0) {
+          throw new NotFoundError("No wordlists found.");
         }
 
         res.status(200).json(wordlists);
@@ -104,7 +114,7 @@ const wordlistsRouter: RouterObject = {
           .eq("owner_id", req.user.id)
           .eq("name", name);
 
-        if (error) {
+        if (error && error.code !== "PGRST116") {
           throw new BadRequestError(error.message);
         }
 
@@ -120,7 +130,7 @@ const wordlistsRouter: RouterObject = {
             owner_id: req.user.id,
             name,
             words,
-            public: is_public,
+            is_public,
           })
           .select("*")
           .single();
@@ -129,7 +139,7 @@ const wordlistsRouter: RouterObject = {
           throw new BadRequestError(insertError.message);
         }
 
-        res.status(200).json(wordlists);
+        res.status(201).json(wordlists);
       },
     },
     {
@@ -141,9 +151,9 @@ const wordlistsRouter: RouterObject = {
       zodSchema: z.object({
         body: z.object({
           id: idValueSchema,
-          name: usernameValueSchema,
-          words: z.array(reasonableWordSchema).max(250),
-          is_public: z.boolean().default(false),
+          name: usernameValueSchema.optional(),
+          words: z.array(reasonableWordSchema).max(250).optional(),
+          is_public: z.boolean().optional(),
         }),
       }),
       handler: async (req: Request, res: Response) => {
@@ -156,14 +166,15 @@ const wordlistsRouter: RouterObject = {
           .from("wordlists")
           .select("id")
           .eq("id", id)
-          .eq("owner_id", req.user.id);
+          .eq("owner_id", req.user.id)
+          .single();
 
-        if (error) {
+        if (error && error.code !== "PGRST116") {
           throw new BadRequestError(error.message);
         }
 
         if (!existingWordlist) {
-          throw new BadRequestError("Wordlist not found.");
+          throw new NotFoundError("Wordlist not found.");
         }
 
         const { data: conflictingWordlist, error: conflictError } =
@@ -185,12 +196,27 @@ const wordlistsRouter: RouterObject = {
           );
         }
 
+        const updates: Partial<{
+          name: string;
+          words: string[];
+          is_public: boolean;
+        }> = {};
+
+        if (name) updates.name = name;
+
+        if (words) updates.words = words;
+
+        if (is_public !== undefined) updates.is_public = is_public;
+
+        if (Object.keys(updates).length === 0) {
+          throw new BadRequestError("No fields to update");
+          return;
+        }
+
         const { data: wordlist, error: updateError } = await supabase
           .from("wordlists")
           .update({
-            name,
-            words,
-            public: is_public,
+            ...updates,
           })
           .eq("id", id)
           .eq("owner_id", req.user.id)
@@ -222,14 +248,15 @@ const wordlistsRouter: RouterObject = {
           .from("wordlists")
           .select("id")
           .eq("id", id)
-          .eq("owner_id", req.user.id);
+          .eq("owner_id", req.user.id)
+          .single();
 
-        if (error) {
+        if (error && error.code !== "PGRST116") {
           throw new BadRequestError(error.message);
         }
 
         if (!existingWordlist) {
-          throw new BadRequestError("Wordlist not found.");
+          throw new NotFoundError("Wordlist not found.");
         }
 
         const { error: deleteError } = await supabase
@@ -242,8 +269,10 @@ const wordlistsRouter: RouterObject = {
           throw new BadRequestError(deleteError.message);
         }
 
-        res.status(204).send();
+        res.sendStatus(204);
       },
     },
   ],
 };
+
+export default wordlistsRouter;

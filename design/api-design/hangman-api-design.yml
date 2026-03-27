@@ -107,7 +107,7 @@ paths:
     $ref: "./paths/profiles.yml#/exists"
   /profiles/view:
     $ref: "./paths/profiles.yml#/view"
-  /wordlists/default:
+  /wordlists:
     $ref: "./paths/wordlists.yml#/default"
   /wordlists/search:
     $ref: "./paths/wordlists.yml#/search"

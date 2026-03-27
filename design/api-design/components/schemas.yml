@@ -27,12 +27,21 @@ DateTime:
 Words:
   type: array
   description: Formatting of a word allowed to be stored in a wordlist
+  maxItems: 250
   items:
     type: string
     minLength: 2
-    maxLength: 250
-    pattern: "^[A-Za-z][a-z]*([- ][A-Za-z][a-z]*)*$"
+    maxLength: 20
+    pattern: "^[A-Za-z]+([ -][A-Za-z]+)*$"
     example: "My Word"
+
+WordlistName:
+  type: string
+  description: Name of a user-owned wordlist
+  minLength: 3
+  maxLength: 30
+  pattern: "^[a-zA-Z0-9][a-zA-Z0-9 _-]*[a-zA-Z0-9]$"
+  example: "my-wordlist"
 
 Lives:
   type: number
@@ -152,19 +161,15 @@ Wordlist:
   description: Wordlist for a game
   required:
     - id
-    - owner_id
     - name
     - words
-    - created_at
-    - is_public
   properties:
     id:
       $ref: "#/ID"
     owner_id:
       $ref: "#/ID"
     name:
-      type: string
-      example: "@3.,wordlist"
+      $ref: "#/WordlistName"
     words:
       $ref: "#/Words"
     created_at:
@@ -175,6 +180,47 @@ Wordlist:
       $ref: "#/DateTime"
     is_public:
       type: boolean
+    default:
+      type: boolean
+
+WordlistCreateInput:
+  type: object
+  required:
+    - name
+    - words
+  properties:
+    name:
+      $ref: "#/WordlistName"
+    words:
+      $ref: "#/Words"
+    is_public:
+      type: boolean
+      default: false
+
+WordlistUpdateInput:
+  type: object
+  required:
+    - id
+    - name
+    - words
+  properties:
+    id:
+      $ref: "#/ID"
+    name:
+      $ref: "#/WordlistName"
+    words:
+      $ref: "#/Words"
+    is_public:
+      type: boolean
+      default: false
+
+WordlistDeleteInput:
+  type: object
+  required:
+    - id
+  properties:
+    id:
+      $ref: "#/ID"
 
 RelationStatus:
   type: string
