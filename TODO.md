@@ -14,7 +14,7 @@
 - - - [x] Test it in postman
 - - [X] Test profiles api and profile apis
 - - - [ ] create tests
-- - [ ] Test Relations apis
+- - [X] Test Relations apis
 - - - [X] Fix empty string issues in the api endpoint
 - - [ ] Document the code using comments for better readability
 - - [ ] Finish the design and implementation of other endpoints

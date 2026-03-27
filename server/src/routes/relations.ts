@@ -29,7 +29,7 @@ const relationsRouter: RouterObject = {
             status,
             requested_at,
             accepted_at,
-            requester:profiles!relationships_requester_id_fkey (
+            requester:profiles!relationships_requester_id_fkey1 (
               id,
               username,
               pfp,
@@ -37,7 +37,7 @@ const relationsRouter: RouterObject = {
               created_at,
               deleted_at
             ),
-            addressee:profiles!relationships_addressee_id_fkey (
+            addressee:profiles!relationships_addressee_id_fkey1 (
               id,
               username,
               pfp,
@@ -52,15 +52,22 @@ const relationsRouter: RouterObject = {
 
         // Error here likely means the user has no relations
         if (error) {
+          throw new NotFoundError(error.message);
+        }
+        if (relations.length === 0) {
           throw new NotFoundError("No relations found");
         }
 
         // Map the relations to include the other user's data and filter out deleted users and relations.
         let result = relations.map((relation) => {
-          const otherUser =
+          const relationUser =
             relation.requester_id === req.user.id
-              ? relation.addressee?.[0]
-              : relation.requester?.[0];
+              ? relation.addressee
+              : relation.requester;
+
+          const otherUser = Array.isArray(relationUser)
+            ? relationUser[0]
+            : relationUser;
 
           // status variable to keep track of user status
           let status = relation.status;
@@ -98,6 +105,7 @@ const relationsRouter: RouterObject = {
         });
 
         result = result.filter((r) => r !== null);
+
         res.status(200).json(result);
       },
     },
@@ -190,7 +198,9 @@ const relationsRouter: RouterObject = {
           .insert({
             requester_id: req.user.id,
             addressee_id: id,
-          });
+          })
+          .select("*")
+          .single();
 
         if (error) {
           throw new BadRequestError(error.message);
