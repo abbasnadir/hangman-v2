@@ -1,5 +1,5 @@
 create:
-  get:
+  post:
     tags: [Games]
     operationId: createGame
     summary: Create a new game

@@ -121,3 +121,5 @@ paths:
     $ref: "./paths/relations.yml#/respond"
   /games/all:
     $ref: "./paths/games.yml#/all"
+  /game/create:
+    $ref: "./paths/game.yml#/create"
