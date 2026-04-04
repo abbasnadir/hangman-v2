@@ -45,7 +45,7 @@ erDiagram
         INT round_index
         TEXT word
         TEXT status
-        UUID winner FK
+        TIMESTAMPTZ created_at
         TIMESTAMPTZ started_at
         TIMESTAMPTZ finished_at
     }
@@ -54,6 +54,15 @@ erDiagram
         UUID game_id FK
         UUID user_id FK
         TIMESTAMPTZ joined_at
+        TEXT result
+    }
+
+    game_round_players {
+        UUID id PK
+        UUID game_round_id FK
+        UUID user_id FK
+        TIMESTAMPTZ joined_at
+        TIMESTAMPTZ left_at
         TEXT result
     }
 
