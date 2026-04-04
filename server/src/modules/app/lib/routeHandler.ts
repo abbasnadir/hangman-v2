@@ -3,7 +3,7 @@ import path from "path";
 import { Router } from "express";
 
 import { tryCatch } from "../utils/tryCatch.js";
-import type { RouterObject } from "../../types/router.js";
+import type { RouterObject } from "../types/router.js";
 import { authHandler } from "./auth.js";
 import { rateLimiter } from "./rateLimiter.js";
 import { validate } from "../middlewares/inputSanitizer.js";

@@ -1,5 +1,5 @@
 // Check if all the environment variables are set
-import "./lib/env.js";
+import "./modules/app/lib/env.js";
 
 // Type imports
 
@@ -11,9 +11,9 @@ import logger from "morgan";
 import cors from "cors";
 
 // Module imports
-import { routesHandler } from "./lib/routeHandler.js";
-import { errorHandler } from "./middlewares/errorHandler.js";
-import { NotFoundError } from "./errors/httpErrors.js";
+import { routesHandler } from "./modules/app/lib/routeHandler.js";
+import { errorHandler } from "./modules/app/middlewares/errorHandler.js";
+import { NotFoundError } from "./modules/app/errors/httpErrors.js";
 const app: Express = express();
 const __dirname = import.meta.dirname;
 

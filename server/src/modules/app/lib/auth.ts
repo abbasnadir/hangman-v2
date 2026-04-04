@@ -1,5 +1,5 @@
 // Import types
-import type { authorization } from "../../types/router.js";
+import type { authorization } from "../types/router.js";
 import type { NextFunction, Request, Response, RequestHandler } from "express";
 
 // Module imports

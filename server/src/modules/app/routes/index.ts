@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import type { RouterObject } from "../../types/router.js";
+import type { RouterObject } from "../types/router.js";
 
 /* GET home page. */
 const indexRouter: RouterObject = {

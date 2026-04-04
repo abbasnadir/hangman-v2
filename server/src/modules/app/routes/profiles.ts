@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import type { RouterObject } from "../../types/router.js";
+import type { RouterObject } from "../types/router.js";
 import { NotFoundError } from "../errors/httpErrors.js";
 import { fetchUserWithUsername } from "../utils/dbQueries.js";
 import { supabase } from "../lib/supabaseClient.js";
