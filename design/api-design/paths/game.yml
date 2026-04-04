@@ -1,0 +1,42 @@
+create:
+  get:
+    tags: [Games]
+    operationId: createGame
+    summary: Create a new game
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: mode_id
+        in: query
+        required: true
+        description: ID of the mode to play
+        schema:
+          $ref: "../components/schemas.yml#/ID"
+      - name: wordlist_id
+        in: query
+        required: true
+        description: ID of the word list to use
+        schema:
+          $ref: "../components/schemas.yml#/ID"
+      - name: number_of_words
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+        description: Number of words to include in the game
+    responses:
+      "201":
+        description: Game created successfully
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yml#/ID"
+      "400":
+        $ref: "../components/responses.yml#/BadRequest"
+      "401":
+        $ref: "../components/responses.yml#/Unauthorized"
+      "404":
+        $ref: "../components/responses.yml#/NotFound"
+      "429":
+        $ref: "../components/responses.yml#/TooManyRequests"
