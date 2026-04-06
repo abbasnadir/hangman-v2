@@ -19,6 +19,11 @@
 - - [ ] Test wordlists and games API endpoints
 - - [ ] Document the code using comments for better readability
 - - [ ] Finish the design and implementation of other endpoints
+- [ ] Design Socket and its endpoints
+- - [ ] Implement authHandler, rateLimiter, zodSchema parser for socket
+- - [ ] Implement zod to parse the routes for both Socket router object and routerObject in routeHandler.ts(s)
+- - [ ] Implement error handling for sockets as well
+- - - [ ] Replace Error instance with UnauthorizedError for authentication in `socketRouter.ts`
 - [x] Set up zod
 - [x] Database structure
 - [x] List Features

@@ -1,5 +1,6 @@
 import type { Server as HttpServer } from "node:http";
 import { Server } from "socket.io";
+import socketRouter from "./lib/socketRouter.js";
 
 export const createSocketServer = (httpServer: HttpServer) => {
   const io = new Server(httpServer, {
@@ -12,13 +13,7 @@ export const createSocketServer = (httpServer: HttpServer) => {
     },
   });
 
-  io.on("open", () => {
-    console.log("Socket server is running");
-  });
-
-  io.on("error", (err) => {
-    console.error("Socket server error:", err);
-  });
+  socketRouter(io);
 };
 
 export default createSocketServer;

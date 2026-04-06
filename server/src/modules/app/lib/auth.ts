@@ -4,14 +4,14 @@ import type { NextFunction, Request, Response, RequestHandler } from "express";
 
 // Module imports
 import { UnauthorizedError } from "../errors/httpErrors.js";
-import verifyJwt from "./verifyJwt.js";
+import verifyJwt from "../../shared/lib/verifyJwt.js";
 
 /* An Auth Handler that takes authType
 and returns middleware to dynamically handle
 authentication based on the RouteObject's needs.
 */
 export function authHandler(authType: authorization): RequestHandler {
-  return async (req: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, _res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization;
 
     try {
