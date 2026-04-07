@@ -8,6 +8,8 @@ import { rateLimiter } from "./rateLimiter.js";
 import socketHandler from "./socketHandler.js";
 import { tryCatchSocket } from "../utils/tryCatch.js";
 import { validate } from "./inputSanitizer.js";
+import { z } from "zod";
+import { SocketRouteObjectSchema } from "../schemas/socketHandlerSchema.js";
 
 export default async function socketRouter(io: Server) {
   const parentDir = path.join(import.meta.dirname, "../routes");
@@ -36,19 +38,17 @@ export default async function socketRouter(io: Server) {
       const module = await import(path.join(parentDir, dir.name));
       const imported = module.default as SocketRouteObject;
 
-      if (
-        !(
-          imported &&
-          typeof imported === "object" &&
-          "eventCategory" in imported &&
-          "functions" in imported
-        )
-      ) {
-        console.error(`Invalid socket route object in ${dir.name}`);
+      const parsed = SocketRouteObjectSchema.safeParse(imported);
+
+      if (!parsed.success) {
+        console.error(
+          `Invalid socket route object in ${dir.name}`,
+          parsed.error,
+        );
         continue;
       }
 
-      socketRoutes.push(imported);
+      socketRoutes.push(parsed.data as SocketRouteObject);
     }
     io.on("connection", (socket) => {
       for (const routerObj of socketRoutes) {

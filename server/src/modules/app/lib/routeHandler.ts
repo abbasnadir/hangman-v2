@@ -7,6 +7,7 @@ import type { RouterObject } from "../types/router.js";
 import { authHandler } from "./auth.js";
 import { rateLimiter } from "./rateLimiter.js";
 import { validate } from "../middlewares/inputSanitizer.js";
+import { RouterObjectSchema } from "../schemas/routerObjectSchema.js";
 
 export async function routesHandler(): Promise<Router> {
   const parentDir = path.join(import.meta.dirname, "../routes");
@@ -25,6 +26,13 @@ export async function routesHandler(): Promise<Router> {
 
       const module = await import(path.join(parentDir, dir.name));
       const routerObj: RouterObject = module.default;
+
+      const parsed = RouterObjectSchema.safeParse(routerObj);
+
+      if (!parsed.success) {
+        console.error(`Invalid router object in ${dir.name}`, parsed.error);
+        continue;
+      }
 
       for (const obj of routerObj.functions) {
         const fullPath = routerObj.path + (obj.props ?? "");

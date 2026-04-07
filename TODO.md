@@ -21,7 +21,7 @@
 - - [ ] Finish the design and implementation of other endpoints
 - [ ] Design Socket and its endpoints
 - - [x] Implement authHandler, rateLimiter, zodSchema parser for socket
-- - [ ] Implement zod to parse the routes for both Socket router object and routerObject in routeHandler.ts(s)
+- - [x] Implement zod to parse the routes for both Socket router object and routerObject in routeHandler.ts
 - - [ ] Implement error handling for sockets as well
 - - - [ ] Replace Error instance with UnauthorizedError for authentication in `socketRouter.ts`
 - [x] Set up zod
