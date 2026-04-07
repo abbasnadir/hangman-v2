@@ -7,6 +7,7 @@ import { authHandler } from "../lib/auth.js";
 import { rateLimiter } from "./rateLimiter.js";
 import socketHandler from "./socketHandler.js";
 import { tryCatchSocket } from "../utils/tryCatch.js";
+import { validate } from "./inputSanitizer.js";
 
 export default async function socketRouter(io: Server) {
   const parentDir = path.join(import.meta.dirname, "../routes");
@@ -58,6 +59,7 @@ export default async function socketRouter(io: Server) {
             fullEvent,
             authHandler(obj.auth),
             rateLimiter(obj.rateLimit),
+            validate(obj.zodSchema),
             tryCatchSocket(obj.handler),
           );
         }

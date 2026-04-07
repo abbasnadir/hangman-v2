@@ -17,5 +17,6 @@ export default async function verifyJwt(token: string) {
     id: payload.sub as string,
     email: payload.email as string | undefined,
     role: payload.role as string | undefined,
+    exp: payload.exp as number | undefined,
   };
 }
