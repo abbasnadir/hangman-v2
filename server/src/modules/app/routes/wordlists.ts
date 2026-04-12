@@ -1,7 +1,10 @@
 import type { RouterObject } from "../types/router.js";
 import type { Request, Response } from "express";
 import { supabase } from "../lib/supabaseClient.js";
-import { BadRequestError, NotFoundError } from "../errors/httpErrors.js";
+import {
+  BadRequestError,
+  NotFoundError,
+} from "../../shared/errors/httpErrors.js";
 import z from "zod";
 import {
   idValueSchema,

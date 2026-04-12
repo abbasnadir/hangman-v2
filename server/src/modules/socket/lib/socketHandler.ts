@@ -1,5 +1,6 @@
 import type { Socket } from "socket.io";
 import type { NextFunction, SocketHandler } from "../types/socketHandler.js";
+import { errorHandler } from "./errorHandler.js";
 
 export default function socketHandler(
   socket: Socket,
@@ -23,10 +24,9 @@ export default function socketHandler(
 
       if (err) {
         finished = true;
-        socket.emit("socket:error", {
-          message: err instanceof Error ? err.message : String(err),
-        });
-        console.error(`Error in socket handler for event ${eventPath}:`, err);
+
+        errorHandler(err, socket, eventPath);
+
         return;
       }
 

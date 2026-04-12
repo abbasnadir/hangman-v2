@@ -1,5 +1,6 @@
 import type { Socket } from "socket.io";
 import verifyJwt from "../../shared/lib/verifyJwt.js";
+import { UnauthorizedError } from "../../shared/errors/httpErrors.js";
 
 export default async function authenticateSocket(socket: Socket) {
   const handshakeToken = socket.handshake.auth?.token;
@@ -9,7 +10,7 @@ export default async function authenticateSocket(socket: Socket) {
   }
 
   if (typeof handshakeToken !== "string") {
-    throw new Error("Invalid authentication token");
+    throw new UnauthorizedError("Invalid authentication token");
   }
 
   const token = handshakeToken.startsWith("Bearer ")
@@ -17,12 +18,12 @@ export default async function authenticateSocket(socket: Socket) {
     : handshakeToken;
 
   if (!token) {
-    throw new Error("Authentication required");
+    throw new UnauthorizedError("Authentication required");
   }
 
   try {
     socket.data.user = await verifyJwt(token);
   } catch {
-    throw new Error("Invalid or expired token");
+    throw new UnauthorizedError("Invalid or expired token");
   }
 }

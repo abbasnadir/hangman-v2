@@ -1,7 +1,10 @@
 import type { Request, Response } from "express";
 import type { RouterObject } from "../types/router.js";
 import { supabase } from "../lib/supabaseClient.js";
-import { NotFoundError, BadRequestError } from "../errors/httpErrors.js";
+import {
+  NotFoundError,
+  BadRequestError,
+} from "../../shared/errors/httpErrors.js";
 import { z } from "zod";
 
 import { fetchProfileUpdateContext } from "../utils/dbQueries.js";

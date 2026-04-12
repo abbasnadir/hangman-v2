@@ -4,7 +4,7 @@ import type {
   NextFunction,
   ErrorRequestHandler,
 } from "express";
-import { AppError } from "../errors/AppError.js";
+import { AppError } from "../../shared/errors/AppError.js";
 import type { ResponseError } from "../types/responseError.js";
 
 const isDev = process.env.NODE_ENV === "development";

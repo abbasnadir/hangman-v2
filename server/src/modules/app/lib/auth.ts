@@ -3,7 +3,7 @@ import type { authorization } from "../types/router.js";
 import type { NextFunction, Request, Response, RequestHandler } from "express";
 
 // Module imports
-import { UnauthorizedError } from "../errors/httpErrors.js";
+import { UnauthorizedError } from "../../shared/errors/httpErrors.js";
 import verifyJwt from "../../shared/lib/verifyJwt.js";
 
 /* An Auth Handler that takes authType

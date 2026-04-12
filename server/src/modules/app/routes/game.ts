@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import type { RouterObject } from "../types/router.js";
 import { supabase } from "../lib/supabaseClient.js";
+import { BadRequestError, NotFoundError } from "../../shared/errors/httpErrors.js";
 
 /* GET home page. */
 const gameRouter: RouterObject = {
@@ -21,7 +22,7 @@ const gameRouter: RouterObject = {
           .single();
 
         if (error || !user) {
-          throw new Error("User not found or deleted");
+          throw new NotFoundError("User not found or deleted");
         }
 
         const { data: gameData, error: gameError } = await supabase
@@ -42,7 +43,7 @@ const gameRouter: RouterObject = {
         }
 
         if (gameData.length > 0) {
-          throw new Error("You're already part of an active game.");
+          throw new BadRequestError("You're already part of an active game.");
         }
 
         const { data: newGame, error: newGameError } = await supabase
