@@ -1,6 +1,6 @@
 import type { authorization } from "../types/router.js";
 import type {
-  SocketHandler,
+  SocketMiddleware,
   Tpayload,
   NextFunction,
 } from "../types/socketHandler.js";
@@ -10,7 +10,7 @@ import type { Socket } from "socket.io";
 // and returns middleware to dynamically handle
 // authentication based on the RouteObject's needs.
 import authenticateSocket from "./authenticator.js";
-export function authHandler(authType: authorization): SocketHandler {
+export function authHandler(authType: authorization): SocketMiddleware {
   return async (socket: Socket, _payload: Tpayload, next: NextFunction) => {
     if (authType === "none") {
       return next();

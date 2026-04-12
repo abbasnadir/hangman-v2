@@ -1,11 +1,11 @@
 import type { Socket } from "socket.io";
-import type { NextFunction, SocketHandler } from "../types/socketHandler.js";
+import type { NextFunction, SocketMiddleware } from "../types/socketHandler.js";
 import { errorHandler } from "./errorHandler.js";
 
 export default function socketHandler(
   socket: Socket,
   eventPath: string,
-  ...args: SocketHandler[]
+  ...args: SocketMiddleware[]
 ) {
   for (const index in args) {
     if (typeof args[index] !== "function") {

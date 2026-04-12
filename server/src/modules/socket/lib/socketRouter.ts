@@ -8,7 +8,6 @@ import { rateLimiter } from "./rateLimiter.js";
 import socketHandler from "./socketHandler.js";
 import { tryCatchSocket } from "../utils/tryCatch.js";
 import { validate } from "./inputSanitizer.js";
-import { z } from "zod";
 import { SocketRouteObjectSchema } from "../schemas/socketHandlerSchema.js";
 
 export default async function socketRouter(io: Server) {

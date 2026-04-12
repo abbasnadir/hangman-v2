@@ -4,11 +4,11 @@ import { RateLimiterMemory } from "rate-limiter-flexible";
 
 import type {
   NextFunction,
-  SocketHandler,
+  SocketMiddleware,
   Tpayload,
 } from "../types/socketHandler.js";
 
-export function rateLimiter(rateLimit: rateLimit): SocketHandler {
+export function rateLimiter(rateLimit: rateLimit): SocketMiddleware {
   return async (socket: Socket, payload: Tpayload, next: NextFunction) => {
     let points: number;
     let duration: number;
