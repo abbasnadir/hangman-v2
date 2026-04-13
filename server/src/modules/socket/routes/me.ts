@@ -8,7 +8,8 @@ export const meRoute: SocketRouteObject = {
       auth: "none",
       rateLimit: "strict",
       handler: (socket, _payload) => {
-        socket.emit("you", socket.data.user);
+        socket.emit("you", { ok: true, socketId: socket.id });
+        console.log("Received 'me' event from socket:", socket.id);
       },
     },
   ],
