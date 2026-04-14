@@ -7,9 +7,12 @@ import type {
   SocketMiddleware,
   Tpayload,
 } from "../types/socketHandler.js";
+import {
+  UnauthorizedError,
+} from "../../shared/errors/httpErrors.js";
 
 export function rateLimiter(rateLimit: rateLimit): SocketMiddleware {
-  return async (socket: Socket, payload: Tpayload, next: NextFunction) => {
+  return async (socket: Socket, _payload: Tpayload, next: NextFunction) => {
     let points: number;
     let duration: number;
 
@@ -43,7 +46,7 @@ export function rateLimiter(rateLimit: rateLimit): SocketMiddleware {
         `Rate limit exceeded for socket ${socket.id} on event with rate limit "${rateLimit}"`,
       );
       next(
-        new Error(
+        new UnauthorizedError(
           `Rate limit exceeded. Please wait before sending more requests.`,
         ),
       );

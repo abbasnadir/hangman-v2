@@ -26,6 +26,9 @@ export default function Home() {
   useEffect(() => {
     const socket = io("ws://localhost:5000", {
       transports: ["websocket"],
+      auth: {
+        token: session?.access_token || "",
+      },
     });
 
     socketRef.current = socket;
@@ -71,9 +74,15 @@ export default function Home() {
         socketMessageRef.current?.value || "Hello, world!"
       }`.trim(),
     );
-    socket.emit(socketEventRef.current?.value || "test:me", {
-      message: socketMessageRef.current?.value || "Hello, world!",
-    });
+    let content = '{message:"Hello, World!"}';
+    if (socketMessageRef.current) {
+      content = socketMessageRef.current.textContent;
+    }
+
+    socket.emit(
+      socketEventRef.current?.value || "test:me",
+      JSON.parse(content),
+    );
   };
 
   return (

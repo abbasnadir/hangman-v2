@@ -15,6 +15,7 @@
 - - [x] Test profiles api and profile apis
 - - - [ ] create tests
 - - [x] Test Relations apis
+- - [ ] Delete/limit amount of inactive games or abandoned games if multiple created by a user in succession
 - - - [x] Fix empty string issues in the api endpoint
 - - [ ] Test wordlists and games API endpoints
 - - [ ] Document the code using comments for better readability
@@ -24,6 +25,8 @@
 - - [x] Implement zod to parse the routes for both Socket router object and routerObject in routeHandler.ts
 - - [x] Implement error handling for sockets as well
 - - - [x] Replace Error instance with UnauthorizedError for authentication in `socketRouter.ts`
+- - [ ] Check for the deleted user in authenticator itself for routes with required authentication
+- - [ ] Fix client side testing and test game:join event
 - [x] Set up zod
 - [x] Database structure
 - [x] List Features

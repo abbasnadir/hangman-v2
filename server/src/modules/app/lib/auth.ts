@@ -3,8 +3,12 @@ import type { authorization } from "../types/router.js";
 import type { NextFunction, Request, Response, RequestHandler } from "express";
 
 // Module imports
-import { UnauthorizedError } from "../../shared/errors/httpErrors.js";
+import {
+  UnauthorizedError,
+  NotFoundError,
+} from "../../shared/errors/httpErrors.js";
 import verifyJwt from "../../shared/lib/verifyJwt.js";
+import { fetchUserWithId } from "../utils/dbQueries.js";
 
 /* An Auth Handler that takes authType
 and returns middleware to dynamically handle
@@ -25,6 +29,17 @@ export function authHandler(authType: authorization): RequestHandler {
         } catch (err) {
           throw new UnauthorizedError("Invalid or expired token");
         }
+
+        // Check if user exists and is not deleted in the database for required auth routes
+        fetchUserWithId(req.user.id)
+          .then((user) => {
+            if (!user) {
+              throw new NotFoundError("User not found or deleted");
+            }
+          })
+          .catch((err) => {
+            throw err instanceof Error ? err : new Error("Database error");
+          });
 
         // Optional Auth, Try auth but ignore if not present
       } else if (authType === "optional") {

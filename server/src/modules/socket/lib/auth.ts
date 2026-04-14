@@ -10,6 +10,7 @@ import type { Socket } from "socket.io";
 // and returns middleware to dynamically handle
 // authentication based on the RouteObject's needs.
 import authenticateSocket from "./authenticator.js";
+import { UnauthorizedError } from "../../shared/errors/httpErrors.js";
 export function authHandler(authType: authorization): SocketMiddleware {
   return async (socket: Socket, _payload: Tpayload, next: NextFunction) => {
     if (authType === "none") {
@@ -20,7 +21,7 @@ export function authHandler(authType: authorization): SocketMiddleware {
 
     if (authType === "required") {
       if (handshakeToken == null || handshakeToken === "") {
-        return next(new Error("Authentication required"));
+        return next(new UnauthorizedError("Authentication required"));
       }
     }
 
@@ -34,7 +35,11 @@ export function authHandler(authType: authorization): SocketMiddleware {
       await authenticateSocket(socket);
       return next();
     } catch (err) {
-      return next(err instanceof Error ? err : new Error(String(err)));
+      return next(
+        err instanceof Error
+          ? err
+          : new UnauthorizedError("Invalid authentication token"),
+      );
     }
   };
 }

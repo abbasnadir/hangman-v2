@@ -122,12 +122,6 @@ const relationsRouter: RouterObject = {
       handler: async (req: Request, res: Response) => {
         const id: string = res.locals.params.id;
 
-        const user = await fetchUserWithId(id);
-
-        if (!user) {
-          throw new NotFoundError("User not found");
-        }
-
         // Prevent self friend requests
         if (id === req.user.id) {
           throw new BadRequestError(

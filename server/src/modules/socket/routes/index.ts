@@ -4,12 +4,11 @@ export const meRoute: SocketRouteObject = {
   eventCategory: "test",
   functions: [
     {
-      event: "me",
+      event: "index",
       auth: "none",
       rateLimit: "strict",
       handler: (socket, _payload) => {
-        socket.emit("you", { ok: true, socketId: socket.id });
-        console.log("Received 'me' event from socket:", socket.id);
+        socket.emit("Test", { ok: true, socketId: socket.id });
       },
     },
   ],

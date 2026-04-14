@@ -1,5 +1,4 @@
-import type { Socket } from "socket.io";
-import type { ZodObject } from "zod";
+import type { ZodType } from "zod";
 import type { SocketController } from "./socketHandler.js";
 export interface SocketRouteObject {
   eventCategory: string;
@@ -10,7 +9,7 @@ export interface SocketRoute<TPayload = unknown> {
   event: string;
   auth: authorization;
   rateLimit: rateLimit;
-  zodSchema?: ZodObject<any> | undefined;
+  zodSchema?: ZodType<TPayload> | undefined;
   handler: SocketController<TPayload>;
 }
 

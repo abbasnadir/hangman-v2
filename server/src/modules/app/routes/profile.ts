@@ -174,17 +174,6 @@ const profileRouter: RouterObject = {
       rateLimit: "strict",
       keyType: "user",
       handler: async (req: Request, res: Response) => {
-        const { data: profile, error } = await supabase
-          .from("profiles")
-          .select("id")
-          .eq("id", req.user.id)
-          .is("deleted_at", null)
-          .single();
-
-        if (error || !profile) {
-          throw new NotFoundError("User not found");
-        }
-
         const { error: deleteError } = await supabase
           .from("profiles")
           .update({ deleted_at: new Date().toISOString() })

@@ -9,6 +9,7 @@ import socketHandler from "./socketHandler.js";
 import { tryCatchSocket } from "../utils/tryCatch.js";
 import { validate } from "./inputSanitizer.js";
 import { SocketRouteObjectSchema } from "../schemas/socketHandlerSchema.js";
+import { UnauthorizedError } from "../../shared/errors/httpErrors.js";
 
 export default async function socketRouter(io: Server) {
   const parentDir = path.join(import.meta.dirname, "../routes");
@@ -20,7 +21,9 @@ export default async function socketRouter(io: Server) {
     } catch (err) {
       console.error("Socket authentication error:", err);
       next(
-        err instanceof Error ? err : new Error("Socket authentication failed"),
+        err instanceof Error
+          ? err
+          : new UnauthorizedError("Socket authentication failed"),
       );
     }
   });
