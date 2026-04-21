@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { SocketRouteObject } from "../types/router.js";
 import { supabase } from "../../app/lib/supabaseClient.js";
+import fetchUserActiveGameRound from "../../shared/utils/dbQueries.js";
 
 const joinGamePayloadSchema = z.object({
   gameId: z.uuid("Invalid game ID. Must be a valid UUID string."),
@@ -44,7 +45,6 @@ export const gameRoute: SocketRouteObject = {
           .from("games")
           .select("id")
           .eq("id", parsedPayload.gameId)
-          .is("deleted_at", null)
           .single();
 
         if (gameError) {
@@ -63,11 +63,56 @@ export const gameRoute: SocketRouteObject = {
           return;
         }
 
-        socket.join(parsedPayload.gameId);
-        socket.emit("game:join", {
-          success: true,
-          gameId: parsedPayload.gameId,
-        });
+        const gameData = await fetchUserActiveGameRound(user.id);
+
+        if (gameData.length > 0) {
+          socket.emit("game:join", {
+            success: false,
+            error: "You're already part of an active game.",
+          });
+          return;
+        }
+
+        const { data: currentRound, error: roundError } = await supabase
+          .from("rounds")
+          .insert({
+            game_id: parsedPayload.gameId,
+            user_id: user.id,
+          })
+          .select("id")
+          .eq("game_id", parsedPayload.gameId)
+          .is("ended_at", null)
+          .single();
+
+        const { data: gameInstance, error: instanceError } = await supabase
+          .from("rounds")
+          .insert({
+            game_id: parsedPayload.gameId,
+            user_id: user.id,
+          })
+          .select("id")
+          .eq("game_id", parsedPayload.gameId)
+          .is("ended_at", null)
+          .single();
+
+        if (roundError) {
+          socket.emit("game:join", {
+            success: false,
+            error: roundError.message,
+          });
+          return;
+        }
+
+        if (currentRound) {
+          socket.join(parsedPayload.gameId);
+          socket.emit("game:join", {
+            success: true,
+            gameId: parsedPayload.gameId,
+          });
+        }
+
+        socket.data.user.currentGameId = parsedPayload.gameId;
+        socket.data.user.currentRoundId = currentRound.id;
       },
     },
   ],

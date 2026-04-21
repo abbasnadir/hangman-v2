@@ -7,6 +7,7 @@ import {
 } from "../../shared/errors/httpErrors.js";
 import { z } from "zod";
 import { gameSchema } from "../schemas/gameSchema.js";
+import { fetchUserActiveGameRound } from "../../shared/utils/dbQueries.js";
 
 /* GET home page. */
 const gameRouter: RouterObject = {
@@ -56,22 +57,7 @@ const gameRouter: RouterObject = {
           throw new NotFoundError("Game mode not found");
         }
 
-        const { data: gameData, error: gameError } = await supabase
-          .from("game_round_players")
-          .select(
-            `
-                game_round_id,
-                game_rounds!inner(status)
-            `,
-          )
-          .eq("user_id", req.user.id)
-          .is("left_at", null)
-          .eq("game_rounds.status", "in_progress")
-          .limit(1);
-
-        if (gameError) {
-          throw gameError;
-        }
+        const gameData = await fetchUserActiveGameRound(req.user.id);
 
         if (gameData.length > 0) {
           throw new BadRequestError("You're already part of an active game.");
