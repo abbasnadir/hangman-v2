@@ -21,4 +21,19 @@ export async function fetchUserActiveGameRound(userId: string) {
   return gameData;
 }
 
+export async function fetchActiveRound(gameId: string) {
+  const { data: roundData, error: roundError } = await supabase
+    .from("game_rounds")
+    .select("*")
+    .eq("game_id", gameId)
+    .eq("status", "in_progress")
+    .limit(1);
+
+  if (roundError) {
+    throw new Error(roundError.message);
+  }
+
+  return roundData;
+}
+
 export default fetchUserActiveGameRound;

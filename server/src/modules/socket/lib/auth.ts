@@ -11,6 +11,7 @@ import type { Socket } from "socket.io";
 // authentication based on the RouteObject's needs.
 import authenticateSocket from "./authenticator.js";
 import { UnauthorizedError } from "../../shared/errors/httpErrors.js";
+import { supabase } from "../../app/lib/supabaseClient.js";
 export function authHandler(authType: authorization): SocketMiddleware {
   return async (socket: Socket, _payload: Tpayload, next: NextFunction) => {
     if (authType === "none") {
@@ -33,6 +34,20 @@ export function authHandler(authType: authorization): SocketMiddleware {
 
     try {
       await authenticateSocket(socket);
+
+      if (authType == "required") {
+        const { data, error } = await supabase
+          .from("users")
+          .select("id")
+          .eq("id", socket.data.user.id)
+          .is("deleted_at", null)
+          .single();
+
+        if (error || !data) {
+          return next(new UnauthorizedError("Invalid user"));
+        }
+      }
+
       return next();
     } catch (err) {
       return next(

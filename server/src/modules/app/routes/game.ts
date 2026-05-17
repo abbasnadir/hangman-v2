@@ -30,7 +30,7 @@ const gameRouter: RouterObject = {
 
         const { data: wordlistData, error: wordlistError } = await supabase
           .from("wordlists")
-          .select("id")
+          .select("id, words")
           .eq("id", wordlist)
           .or(`is_public.eq.true,owner_id.eq.${req.user.id},default.eq.true`)
           .single();
@@ -79,6 +79,26 @@ const gameRouter: RouterObject = {
           throw newGameError || new Error("Failed to create a new game.");
         }
 
+        const { data: newRound, error: newRoundError } = await supabase
+          .from("game_rounds")
+          .insert({
+            game_id: newGame.id,
+            status: "in_progress",
+            round_index: 1,
+            word: wordlistData.words[
+              Math.floor(Math.random() * wordlistData.words.length)
+            ],
+          })
+          .select("id")
+          .single();
+
+        if (newRoundError || !newRound) {
+          // If round creation fails, we should clean up the created game to avoid orphaned records.
+          await supabase.from("games").delete().eq("id", newGame.id);
+          throw (
+            newRoundError || new Error("Failed to create a new game round.")
+          );
+        }
         res.status(201).json({ gameId: newGame.id });
       },
     },
