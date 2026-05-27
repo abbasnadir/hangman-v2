@@ -143,7 +143,6 @@ export const gameRoute: SocketRouteObject = {
         }
 
         if (newRoundPlayer) {
-          
           socket.join(gameId);
           socket.emit("game:join", {
             success: true,
@@ -151,8 +150,13 @@ export const gameRoute: SocketRouteObject = {
             reconnected: false,
           });
 
+          socket.to(gameId).emit("game:player_joined", {
+            userId: userId,
+          });
+
           // Persist game/round info on the socket connection for future events
           socket.data.user.currentGameId = gameId;
+          socket.data.user.currentRoundId = roundToJoin.id;
           socket.data.user.currentRoundPlayerId = newRoundPlayer.id; // ID of the player's entry in the round
         }
       },

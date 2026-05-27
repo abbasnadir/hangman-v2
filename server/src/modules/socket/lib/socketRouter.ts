@@ -10,6 +10,7 @@ import { tryCatchSocket } from "../utils/tryCatch.js";
 import { validate } from "./inputSanitizer.js";
 import { SocketRouteObjectSchema } from "../schemas/socketHandlerSchema.js";
 import { UnauthorizedError } from "../../shared/errors/httpErrors.js";
+import disconnect from "./disconnectHandler.js";
 
 export default async function socketRouter(io: Server) {
   const parentDir = path.join(import.meta.dirname, "../routes");
@@ -74,5 +75,9 @@ export default async function socketRouter(io: Server) {
 
   io.on("error", (err) => {
     console.error("Socket server error:", err);
+  });
+
+  io.on("disconnect", (socket, reason) => {
+    disconnect(socket, reason);
   });
 }
