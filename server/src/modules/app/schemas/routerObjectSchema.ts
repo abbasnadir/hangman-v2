@@ -5,12 +5,12 @@ export const RouterObjectSchema = z.object({
   functions: z.array(
     z.object({
       method: z.string(),
-      handler: z.any(),
+      handler: z.unknown(),
       authorization: z.string(),
       rateLimit: z.string(),
       keyType: z.string(),
       props: z.string().optional(),
-      zodSchema: z.any().optional(),
+      zodSchema: z.unknown().optional(),
     }),
   ),
 });

@@ -11,32 +11,16 @@ import {
   UnauthorizedError,
 } from "../../shared/errors/httpErrors.js";
 
+const limiters: Record<string, RateLimiterMemory> = {
+  strict: new RateLimiterMemory({ points: 5, duration: 60 }),
+  game_move: new RateLimiterMemory({ points: 150, duration: 60 }),
+  read: new RateLimiterMemory({ points: 20, duration: 60 }),
+};
+
 export function rateLimiter(rateLimit: rateLimit): SocketMiddleware {
   return async (socket: Socket, _payload: Tpayload, next: NextFunction) => {
-    let points: number;
-    let duration: number;
-
-    switch (rateLimit) {
-      case "strict":
-        points = 5;
-        duration = 60;
-        break;
-      case "game_move":
-        points = 150;
-        duration = 60;
-        break;
-      case "read":
-        points = 20;
-        duration = 60;
-        break;
-      default:
-        return next();
-    }
-
-    const limiter = new RateLimiterMemory({
-      points,
-      duration,
-    });
+    const limiter = limiters[rateLimit];
+    if (!limiter) return next();
 
     try {
       await limiter.consume(socket.id);
@@ -53,3 +37,4 @@ export function rateLimiter(rateLimit: rateLimit): SocketMiddleware {
     }
   };
 }
+

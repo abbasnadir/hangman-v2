@@ -69,7 +69,7 @@ const gameRouter: RouterObject = {
             mode_id: mode,
             created_by: req.user.id,
             wordlist_id: wordlist,
-            lives,
+            total_lives: lives,
             number_of_words: numberOfWords,
           })
           .select("id")
@@ -83,7 +83,6 @@ const gameRouter: RouterObject = {
           .from("game_rounds")
           .insert({
             game_id: newGame.id,
-            status: "in_progress",
             round_index: 1,
             word: wordlistData.words[
               Math.floor(Math.random() * wordlistData.words.length)

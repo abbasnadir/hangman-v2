@@ -37,7 +37,7 @@ export function authHandler(authType: authorization): SocketMiddleware {
 
       if (authType == "required") {
         const { data, error } = await supabase
-          .from("users")
+          .from("profiles")
           .select("id")
           .eq("id", socket.data.user.id)
           .is("deleted_at", null)

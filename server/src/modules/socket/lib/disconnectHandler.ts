@@ -1,4 +1,9 @@
-import { supabase } from "../../app/lib/supabaseClient.js";
+import {
+  getActivePlayersCount,
+  markPlayerAsDisconnected,
+  abandonGameAndRound,
+} from "../../shared/utils/dbQueries.js";
+import { activeGameInstances } from "../routes/game.js";
 import type { Socket } from "socket.io";
 
 export default async function disconnect(socket: Socket, reason: string) {
@@ -6,40 +11,26 @@ export default async function disconnect(socket: Socket, reason: string) {
     return;
   }
 
-  const get_total_players = await supabase
-    .from("game_round_players")
-    .select("id", { count: "exact", head: true })
-    .eq("game_round_id", socket.data.user.currentRoundId);
+  const { currentRoundId, currentGameId, currentRoundPlayerId, id: userId } = socket.data.user;
 
-  if (get_total_players.error) {
-    console.error("Error fetching total players:", get_total_players.error);
-    return;
+  try {
+    // Mark the player as disconnected first, then check remaining count
+    await markPlayerAsDisconnected(currentRoundPlayerId);
+
+    const remaining_players = await getActivePlayersCount(currentRoundId);
+
+    if (remaining_players === 0) {
+      await abandonGameAndRound(currentGameId, currentRoundId);
+      delete activeGameInstances[currentGameId];
+      return;
+    }
+  } catch (error) {
+    console.error("Error during disconnect logic:", error);
   }
 
-  const total_players = get_total_players.count || 0;
-
-  if (total_players === 1) {
-    await supabase
-      .from("game_rounds")
-      .update({ status: "abandoned" })
-      .eq("id", socket.data.user.currentRoundId);
-
-    await supabase
-      .from("games")
-      .update({ status: "abandoned" })
-      .eq("id", socket.data.user.currentGameId);
-
-    return;
-  }
-
-  await supabase
-    .from("game_round_players")
-    .update({ disconnected_at: new Date() })
-    .eq("id", socket.data.user.currentRoundPlayerId);
-
-  if (socket.data.user.currentGameId) {
-    socket.to(socket.data.user.currentGameId).emit("game:player_disconnected", {
-      userId: socket.data.user.id,
+  if (currentGameId) {
+    socket.to(currentGameId).emit("game:player_disconnected", {
+      userId,
       reason,
     });
   }

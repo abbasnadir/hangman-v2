@@ -67,6 +67,9 @@ export default async function socketRouter(io: Server) {
           );
         }
       }
+      socket.on("disconnect", (reason) => {
+        disconnect(socket, reason);
+      });
     });
   } catch (err) {
     console.error("[socketHandler] Failed to read routes directory:", err);
@@ -75,9 +78,5 @@ export default async function socketRouter(io: Server) {
 
   io.on("error", (err) => {
     console.error("Socket server error:", err);
-  });
-
-  io.on("disconnect", (socket, reason) => {
-    disconnect(socket, reason);
   });
 }

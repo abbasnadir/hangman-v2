@@ -7,7 +7,7 @@ const SocketRouteSchema = z.object({
   event: z.string(),
   auth: authorizationSchema,
   rateLimit: rateLimitSchema,
-  zodSchema: z.any().optional(),
+  zodSchema: z.unknown().optional(),
   handler: z.function(),
 });
 

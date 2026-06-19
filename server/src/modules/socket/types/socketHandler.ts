@@ -12,4 +12,4 @@ export type SocketController<TPayload = unknown> = (
 ) => void | Promise<void>;
 
 export type Tpayload = unknown;
-export type NextFunction = (err?: any) => void;
+export type NextFunction = (err?: unknown) => void;
