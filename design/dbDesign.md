@@ -28,7 +28,7 @@ erDiagram
 
     games {
         UUID id PK
-        TEXT mode_id FK
+        BIGINT mode_id FK
         TEXT status
         UUID created_by FK
         UUID wordlist_id FK
@@ -77,7 +77,8 @@ erDiagram
     }
 
     game_modes {
-        TEXT id PK
+        BIGINT id PK
+        TEXT name "UNIQUE"
         INT min_players
         INT max_players
         BOOLEAN ranked
