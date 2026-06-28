@@ -2,8 +2,10 @@ import type { Server as HttpServer } from "node:http";
 import { Server } from "socket.io";
 import socketRouter from "./lib/socketRouter.js";
 
+let io: Server;
+
 export const createSocketServer = (httpServer: HttpServer) => {
-  const io = new Server(httpServer, {
+  io = new Server(httpServer, {
     cors: {
       origin:
         process.env.NODE_ENV === "production"
@@ -14,6 +16,11 @@ export const createSocketServer = (httpServer: HttpServer) => {
   });
 
   socketRouter(io);
+};
+
+export const forceDisconnectUser = (userId: string) => {
+  if (!io) return;
+  io.to(`user_${userId}`).disconnectSockets(true);
 };
 
 export default createSocketServer;

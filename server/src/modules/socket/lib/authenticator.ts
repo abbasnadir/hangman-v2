@@ -22,7 +22,8 @@ export default async function authenticateSocket(socket: Socket) {
   }
 
   try {
-    socket.data.user = await verifyJwt(token);
+    const jwtPayload = await verifyJwt(token);
+    socket.data.user = { ...socket.data.user, ...jwtPayload };
   } catch {
     throw new UnauthorizedError("Invalid or expired token");
   }

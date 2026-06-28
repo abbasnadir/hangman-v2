@@ -54,6 +54,11 @@ export default async function socketRouter(io: Server) {
       socketRoutes.push(parsed.data as SocketRouteObject);
     }
     io.on("connection", (socket) => {
+      // Automatically join a personal room if authenticated
+      if (socket.data?.user?.id) {
+        socket.join(`user_${socket.data.user.id}`);
+      }
+
       for (const routerObj of socketRoutes) {
         for (const obj of routerObj.functions) {
           const fullEvent = `${routerObj.eventCategory}:${obj.event}`;

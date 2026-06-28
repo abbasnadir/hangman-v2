@@ -1,8 +1,8 @@
 import { GameMode } from './defModes.js';
-import type { GameInfo, PlayerState, move } from "../../shared/types/GameInfo.js";
+import type { GameInfo, move } from "../../shared/types/GameInfo.js";
+import { Player } from './Player.js';
 
 export class Classic extends GameMode {
-    players: Record<string, PlayerState> = {};
     winner: string | null = null; // store the first player who completes
 
     constructor(lives: number = 5) {
@@ -13,100 +13,63 @@ export class Classic extends GameMode {
         return players_count === 1;
     }
 
-    checkMove(move: move, playerState: PlayerState): { valid: boolean, correct: boolean } {
-        const guess = move.guess.toLowerCase();
-        // Validation: Must not be previously guessed (length/type handled by Zod)
-        if (playerState.move_set.includes(guess)) return { valid: false, correct: false };
-
-        const correct = this.word.toLowerCase().includes(guess);
-        return { valid: true, correct };
-    }
-
-    processUserMoves(userId: string, moves: move[], gameState: Partial<GameInfo>) {
+    processMove(userId: string, move: move, gameState: Partial<GameInfo>) {
         if (!this.players[userId]) {
-            this.players[userId] = {
-                timeTaken: 0,
-                lastMoveTimestamp: null,
-                move_set: [],
-                completed: false,
-                lives: this.lives,
-                move_index: 0
-            };
+            this.players[userId] = new Player(userId, this.lives);
         }
 
         const player = this.players[userId];
-        if (player.completed) return { player, processedMoves: [], isWinner: false };
+        if (player.completed) return { player, processedMove: null, isWinner: false, isCorrectCompletion: false };
 
-        // Sort moves by timestamp to calculate time differences properly
-        const sortedMoves = [...moves].sort((a, b) =>
-            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-        );
+        const guess = move.guess.toLowerCase();
 
-        // Compute target letters once outside the loop to optimize performance
-        const targetLetters = new Set(this.word.toLowerCase().split(''));
-        const processedMoves = [];
+        // 1. Validation (must not be previously guessed)
+        if (player.move_set.includes(guess)) {
+            return { player, processedMove: null, isWinner: false, isCorrectCompletion: false };
+        }
+
+        // 2. Evaluate Guess and Record it inside the Player class
+        const correct = this.word.toLowerCase().includes(guess);
+        player.recordGuess(guess, correct, this.startedAt);
+
+        const processedMove = {
+            guess,
+            correct,
+            timestamp: move.timestamp,
+            move_index: player.move_index
+        };
+
         let justWon = false;
         let isCorrectCompletion = false;
 
-        for (const m of sortedMoves) {
-            if (player.completed) break;
-
-            const { valid, correct } = this.checkMove(m, player);
-            if (valid) {
-                const moveTime = new Date(m.timestamp).getTime();
-
-                if (player.lastMoveTimestamp !== null) {
-                    const timeSpent = moveTime - player.lastMoveTimestamp;
-                    if (timeSpent > 0) {
-                        player.timeTaken += timeSpent;
-                    }
+        if (correct) {
+            // Check if won (all unique letters in word are guessed)
+            const targetLetters = new Set(this.word.toLowerCase().split(''));
+            let allGuessed = true;
+            for (const letter of targetLetters) {
+                if (!player.move_set.includes(letter)) {
+                    allGuessed = false;
+                    break;
                 }
-                player.lastMoveTimestamp = moveTime;
+            }
 
-                const guess = m.guess.toLowerCase();
-                player.move_set.push(guess);
-                player.move_index += 1;
-
-                processedMoves.push({
-                    guess: guess,
-                    correct,
-                    timestamp: m.timestamp,
-                    move_index: player.move_index
-                });
-
-                if (!correct) {
-                    player.lives -= 1;
-                    if (player.lives <= 0) {
-                        player.completed = true; // Lost
-                    }
-                } else {
-                    // Check if won (all unique letters in word are guessed)
-                    let allGuessed = true;
-                    for (const letter of targetLetters) {
-                        if (!player.move_set.includes(letter)) {
-                            allGuessed = false;
-                            break;
-                        }
-                    }
-
-                    if (allGuessed) {
-                        player.completed = true;
-                        isCorrectCompletion = true;
-                        if (!this.winner) {
-                            this.winner = userId;
-                            justWon = true;
-                        }
-                    }
+            if (allGuessed) {
+                player.finish(this.startedAt);
+                isCorrectCompletion = true;
+                if (!this.winner) {
+                    this.winner = userId;
+                    justWon = true;
                 }
             }
         }
 
-        return { player, processedMoves, isWinner: justWon, isCorrectCompletion };
+        return { player, processedMove, isWinner: justWon, isCorrectCompletion };
     }
 
     resetRound(word: string): void {
         this.word = word;
         this.winner = null;
         this.players = {};
+        this.startedAt = Date.now(); // Reset global clock for the new round
     }
 }

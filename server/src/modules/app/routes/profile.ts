@@ -124,7 +124,7 @@ const profileRouter: RouterObject = {
             if (
               !body.pfp.startsWith(
                 process.env.SUPABASE_URL +
-                  `/storage/v1/object/public/profile_pictures/${req.user.id}`,
+                `/storage/v1/object/public/profile_pictures/${req.user.id}`,
               )
             ) {
               throw new BadRequestError(
@@ -182,6 +182,10 @@ const profileRouter: RouterObject = {
         if (deleteError) {
           throw new BadRequestError("Failed to delete user");
         }
+
+        // Instantly force-disconnect any active websocket they have open
+        const { forceDisconnectUser } = await import("../../socket/socketServer.js");
+        forceDisconnectUser(req.user.id);
 
         res.sendStatus(204);
       },

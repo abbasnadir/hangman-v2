@@ -6,7 +6,7 @@ export async function fetchUserActiveGameRound(userId: string) {
     .select(
       `
                 game_round_id,
-                game_rounds!inner(status)
+                game_rounds!inner(status, game_id)
             `,
     )
     .eq("user_id", userId)

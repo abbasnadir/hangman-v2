@@ -22,11 +22,9 @@ const joinGamePayloadSchema = z.object({
   gameId: z.uuid("Invalid game ID. Must be a valid UUID string."),
 });
 
-const submitMovesPayloadSchema = z.object({
-  moves: z.array(z.object({
-    guess: z.string().length(1, "Guess must be a single letter.").regex(/^[a-zA-Z]$/, "Guess must be a letter."),
-    timestamp: z.string().or(z.date()).transform((val) => new Date(val))
-  }))
+const submitMovePayloadSchema = z.object({
+  guess: z.string().length(1, "Guess must be a single letter.").regex(/^[a-zA-Z]$/, "Guess must be a letter."),
+  timestamp: z.string().or(z.date()).transform((val) => new Date(val))
 });
 
 export const gameRoute: SocketRouteObject = {
@@ -63,27 +61,36 @@ export const gameRoute: SocketRouteObject = {
         const otherGameData = await fetchUserActiveGameRound(userId);
 
         if (otherGameData && otherGameData.length > 0) {
-          socket.emit("game:join", {
-            success: false,
-            error: "You're already part of another active game.",
-          });
-          return;
+
+          const gameRounds: any = otherGameData[0]?.game_rounds;
+          const activeGameId = Array.isArray(gameRounds) ? gameRounds[0]?.game_id : gameRounds?.game_id;
+
+          if (activeGameId && activeGameId !== gameId) {
+            socket.emit("game:join", {
+              success: false,
+              error: "You're already part of another active game.",
+            });
+            return;
+          }
         }
 
         // 2. Check if user is already a player in this specific game (for re-connections).
         // This is based on the `game_players` table, which tracks all players in a game.
         let existingPlayer;
+
         try {
           existingPlayer = await checkUserInGame(gameId, userId);
-        } catch (playerCheckError: unknown) {
+        } catch (error) {
+          console.error("Error checking existing player:", error);
           socket.emit("game:join", {
             success: false,
-            error: "Error checking game status: " + (playerCheckError instanceof Error ? playerCheckError.message : String(playerCheckError)),
+            error: "Failed to verify game status.",
           });
           return;
         }
 
-        // If player is already in the game, it's a re-join.
+        // 3. If they are an existing player, fetch the *active round* of this game.
+        // If there's an active round, see if they are part of it.
         if (existingPlayer) {
           socket.join(gameId);
 
@@ -333,38 +340,37 @@ export const gameRoute: SocketRouteObject = {
       }
     },
     {
-      event: "submit_moves",
+      event: "submit_move",
       auth: "required",
-      // Optional: adjust rate limit based on client's reporting frequency (e.g., 1 per second)
       rateLimit: "game_move",
-      zodSchema: submitMovesPayloadSchema,
+      zodSchema: submitMovePayloadSchema,
       handler: async (socket, payload) => {
         const userId = socket.data.user.id;
         const currentGameId = socket.data.user.currentGameId;
 
         if (!currentGameId) {
-          socket.emit("game:submit_moves", { success: false, error: "Not in a game." });
+          socket.emit("game:submit_move", { success: false, error: "Not in a game." });
           return;
         }
 
         const gameMode = activeGameInstances[currentGameId];
         if (!gameMode) {
-          socket.emit("game:submit_moves", { success: false, error: "Game not started or instance lost." });
+          socket.emit("game:submit_move", { success: false, error: "Game not started or instance lost." });
           return;
         }
 
-        const { moves } = payload as z.infer<typeof submitMovesPayloadSchema>;
+        const move = payload as z.infer<typeof submitMovePayloadSchema>;
 
         try {
           const gameState: Partial<GameInfo> = { id: currentGameId };
 
-          const { player, processedMoves, isWinner, isCorrectCompletion } = gameMode.processUserMoves(userId, moves, gameState);
+          const { player, processedMove, isWinner, isCorrectCompletion } = gameMode.processMove(userId, move, gameState);
 
           const currentRoundId = socket.data.user.currentRoundId;
 
-          socket.emit("game:submit_moves", {
+          socket.emit("game:submit_move", {
             success: true,
-            timeTakenMs: player.timeTaken,
+            timeTakenMs: player.getTimeTaken(gameMode.startedAt),
             move_set: player.move_set,
             lives: player.lives,
             completed: player.completed
@@ -372,20 +378,20 @@ export const gameRoute: SocketRouteObject = {
 
           const dbPromises: PromiseLike<unknown>[] = [];
 
-          // Bulk insert valid moves into the database concurrently
-          if (processedMoves.length > 0 && currentRoundId) {
-            const movesToInsert = processedMoves.map((m: { guess: string, correct: boolean, timestamp: Date | string, move_index: number }) => ({
+          // Insert the valid move into the database asynchronously
+          if (processedMove && currentRoundId) {
+            const moveToInsert = {
               round_id: currentRoundId,
               user_id: userId,
-              move_index: m.move_index,
-              guess: m.guess,
-              correct: m.correct,
-              created_at: typeof m.timestamp === 'string' ? m.timestamp : m.timestamp.toISOString()
-            }));
+              move_index: processedMove.move_index,
+              guess: processedMove.guess,
+              correct: processedMove.correct,
+              created_at: typeof processedMove.timestamp === 'string' ? processedMove.timestamp : processedMove.timestamp.toISOString()
+            };
 
             dbPromises.push(
-              supabase.from("moves").insert(movesToInsert).then(({ error }) => {
-                if (error) console.error("Failed to bulk insert moves:", error.message);
+              supabase.from("moves").insert(moveToInsert).then(({ error }) => {
+                if (error) console.error("Failed to insert move:", error.message);
               })
             );
           }
@@ -416,11 +422,11 @@ export const gameRoute: SocketRouteObject = {
             }
 
             if (isWinner) {
-              const winEventPayload = { userId, timeTakenMs: player.timeTaken, word: gameMode.word };
+              const winEventPayload = { userId, timeTakenMs: player.getTimeTaken(gameMode.startedAt), word: gameMode.word };
               socket.to(currentGameId).emit("game:player_won", winEventPayload);
               socket.emit("game:player_won", winEventPayload);
             } else if (isCorrectCompletion) {
-              socket.emit("game:player_completed", { userId, timeTakenMs: player.timeTaken });
+              socket.emit("game:player_completed", { userId, timeTakenMs: player.getTimeTaken(gameMode.startedAt) });
             } else {
               socket.emit("game:player_lost", { userId, word: gameMode.word });
             }

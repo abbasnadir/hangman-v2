@@ -60,7 +60,16 @@ const gameRouter: RouterObject = {
         const gameData = await fetchUserActiveGameRound(req.user.id);
 
         if (gameData.length > 0) {
-          throw new BadRequestError("You're already part of an active game.");
+          // @ts-ignore - dynamic join properties
+          const existingGameId = gameData[0].game_rounds.game_id;
+          res.status(400).json({
+            error: {
+              code: "ACTIVE_GAME_EXISTS",
+              message: "You're already part of an active game.",
+              activeGameId: existingGameId
+            }
+          });
+          return;
         }
 
         const { data: newGame, error: newGameError } = await supabase
@@ -87,6 +96,7 @@ const gameRouter: RouterObject = {
             word: wordlistData.words[
               Math.floor(Math.random() * wordlistData.words.length)
             ],
+            status: 'in_progress'
           })
           .select("id")
           .single();
