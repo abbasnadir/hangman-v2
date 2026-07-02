@@ -8,7 +8,7 @@
 
 ## Prototype
 
-- [ ] Design API endpoints
+- [X] Design API endpoints
 - - [x] Create a mock `/me` path
 - - - [x] Design the endpoint in openAPI
 - - - [x] Test it in postman
@@ -19,13 +19,13 @@
 - - - [x] Fix empty string issues in the api endpoint
 - - [ ] Test wordlists and games API endpoints
 - - [ ] Document the code using comments for better readability
-- - [ ] Finish the design and implementation of other endpoints
-- [ ] Design Socket and its endpoints
+- - [X] Finish the design and implementation of other endpoints
+- [X] Design Socket and its endpoints
 - - [x] Implement authHandler, rateLimiter, zodSchema parser for socket
 - - [x] Implement zod to parse the routes for both Socket router object and routerObject in routeHandler.ts
 - - [x] Implement error handling for sockets as well
 - - - [x] Replace Error instance with UnauthorizedError for authentication in `socketRouter.ts`
-- - [ ] Check for the deleted user in authenticator itself for routes with required authentication
+- - [x] Check for the deleted user in authenticator itself for routes with required authentication
 - - [ ] Fix client side testing and test game:join event
 - [x] Set up zod
 - [x] Database structure
@@ -33,17 +33,17 @@
 - [ ] Update Readme
 - [ ] Create an actual delete endpoint, current delete endpoint is just a deactivation endpoint
 - [ ] Do something about deleted/deactivated accounts still being able to browse the app.
-- [ ] Fix typescript not able to parse zod objects/detect them properly
+- [x] Fix typescript not able to parse zod objects/detect them properly
 
 ## Develop
 
-- [ ] APIs for frontend
-- [ ] Database connection
-- [ ] Frontend
-- [ ] UI Redesign continuation
+- [x] APIs for frontend
+- [x] Database connection
+- [x] Frontend
+- [x] UI Redesign continuation
 - [ ] Design for the users with low connectivity
 - [ ] Handle unauthorised users
 
 ## Optional
 
-- [ ] Use jwks to rotate the supabase signing key automatically.
+- [x] Use jwks to rotate the supabase signing key automatically.
