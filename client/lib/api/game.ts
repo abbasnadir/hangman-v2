@@ -46,5 +46,25 @@ export const GameAPI = {
     }
 
     return response.json();
+  },
+  abandonGame: async (gameId: string): Promise<{ success: boolean }> => {
+    const token = await getAuthToken();
+    if (!token) throw new Error('Not authenticated');
+
+    const response = await fetch(`${API_BASE_URL}/game/abandon`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ gameId })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error?.message || 'Failed to abandon game');
+    }
+
+    return response.json();
   }
 };

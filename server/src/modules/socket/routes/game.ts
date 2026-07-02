@@ -2,30 +2,32 @@ import { z } from "zod";
 import type { SocketRouteObject } from "../types/router.js";
 import { supabase } from "../../app/lib/supabaseClient.js";
 import {
-  fetchUserActiveGameRound,
-  fetchActiveRound,
+  abandonGameAndRound,
   checkUserInGame,
+  getActivePlayersCount,
   getRoundPlayer,
   markPlayerAsActive,
-  getActivePlayersCount,
   markPlayerAsDisconnected,
-  abandonGameAndRound,
+  insertMove,
+  updateRoundPlayerResult,
+  finishGameRound,
+  finishGame,
+  updateGamePlayerResult,
+  getWordlistWords,
+  getUsedWordsInGame,
+  insertNewRound,
+  getGamePlayers,
+  insertRoundPlayers,
+  fetchUserActiveGameRound,
+  fetchActiveRound,
 } from "../../shared/utils/dbQueries.js";
 import { Classic } from "../modes/SinglePlayer.js";
 import { GameMode } from "../modes/defModes.js";
 import type { GameInfo } from "../../shared/types/GameInfo.js";
+import { joinGamePayloadSchema, submitMovePayloadSchema } from "../schemas/gameProcessSchema.js";
 
 // Global registry to persist active GameMode instances
 export const activeGameInstances: Record<string, GameMode> = {};
-
-const joinGamePayloadSchema = z.object({
-  gameId: z.uuid("Invalid game ID. Must be a valid UUID string."),
-});
-
-const submitMovePayloadSchema = z.object({
-  guess: z.string().length(1, "Guess must be a single letter.").regex(/^[a-zA-Z]$/, "Guess must be a letter."),
-  timestamp: z.string().or(z.date()).transform((val) => new Date(val))
-});
 
 export const gameRoute: SocketRouteObject = {
   eventCategory: "game",
@@ -234,7 +236,7 @@ export const gameRoute: SocketRouteObject = {
           // 1. Verify game ownership and get wordlist_id
           const { data: gameData, error: gameError } = await supabase
             .from("games")
-            .select("created_by, mode_id, wordlist_id, total_lives")
+            .select("created_by, mode_id, wordlist_id, total_lives, number_of_words")
             .eq("id", currentGameId)
             .single();
 
@@ -269,12 +271,11 @@ export const gameRoute: SocketRouteObject = {
 
           // 4. Validate with game mode
           // You could instantiate based on gameData.mode_id, but here we use SinglePlayer Classic explicitly
-          const gameMode = new Classic(gameData.total_lives);
+          const gameMode: Classic = new Classic(gameData.total_lives);
 
-          // 5. Fetch the word from the existing round (word is set at game creation)
           const { data: roundData, error: roundFetchError } = await supabase
             .from("game_rounds")
-            .select("word")
+            .select("word, round_index")
             .eq("id", currentRoundId)
             .single();
 
@@ -318,6 +319,14 @@ export const gameRoute: SocketRouteObject = {
           }
 
           // Store the active instance
+          gameMode.startedAt = Date.now(); // Start the global clock precisely now!
+          gameMode.resetRound(roundData.word);
+
+          // Cache game configuration in memory for immediate access
+          gameMode.numberOfWords = gameData.number_of_words;
+          gameMode.wordlistId = gameData.wordlist_id;
+          gameMode.roundIndex = roundData.round_index;
+
           activeGameInstances[currentGameId] = gameMode;
 
           // If everything is satisfied, we can emit the start event
@@ -330,6 +339,9 @@ export const gameRoute: SocketRouteObject = {
           socket.emit("game:start", {
             success: true,
             gameId: currentGameId,
+            roundId: currentRoundId,
+            maskedWord: gameMode.getMaskedWord(userId),
+            startTime: gameMode.startedAt
           });
         } catch (err: unknown) {
           socket.emit("game:start", {
@@ -373,7 +385,8 @@ export const gameRoute: SocketRouteObject = {
             timeTakenMs: player.getTimeTaken(gameMode.startedAt),
             move_set: player.move_set,
             lives: player.lives,
-            completed: player.completed
+            completed: player.completed,
+            maskedWord: gameMode.getMaskedWord(userId)
           });
 
           const dbPromises: PromiseLike<unknown>[] = [];
@@ -390,9 +403,7 @@ export const gameRoute: SocketRouteObject = {
             };
 
             dbPromises.push(
-              supabase.from("moves").insert(moveToInsert).then(({ error }) => {
-                if (error) console.error("Failed to insert move:", error.message);
-              })
+              insertMove(moveToInsert).catch(error => console.error("Failed to insert move:", error.message))
             );
           }
 
@@ -400,119 +411,163 @@ export const gameRoute: SocketRouteObject = {
           if (isWinner || isCorrectCompletion || player.completed) {
             let roundEnded = false;
             let gameEnded = false;
+            let hasNextRound = false;
             let finalResult = "lost";
 
             if (isWinner) {
               finalResult = "won";
-              roundEnded = true;
             } else if (isCorrectCompletion) {
-              finalResult = "completed"; // Restored as requested
+              finalResult = "completed";
             } else {
               finalResult = "lost";
-              if (gameMode.max_players === 1) roundEnded = true;
             }
 
+            // Round is only over when ALL players have completed.
+            roundEnded = gameMode.completedPlayersCount >= Object.keys(gameMode.players).length;
+
+            // Update round player result in DB
             if (currentRoundId) {
               dbPromises.push(
-                supabase.from("game_round_players")
-                  .update({ result: finalResult })
-                  .eq("game_round_id", currentRoundId)
-                  .eq("user_id", userId)
+                updateRoundPlayerResult(currentRoundId, userId, finalResult)
+                  .catch(e => console.error(e.message))
               );
             }
 
-            if (isWinner) {
-              const winEventPayload = { userId, timeTakenMs: player.getTimeTaken(gameMode.startedAt), word: gameMode.word };
-              socket.to(currentGameId).emit("game:player_won", winEventPayload);
-              socket.emit("game:player_won", winEventPayload);
-            } else if (isCorrectCompletion) {
-              socket.emit("game:player_completed", { userId, timeTakenMs: player.getTimeTaken(gameMode.startedAt) });
+            let previousWord = gameMode.word;
+            let previousTimeTakenMs = player.getTimeTaken(gameMode.startedAt);
+
+            const currentRoundIndex = (gameMode as any).roundIndex;
+            const totalWords = (gameMode as any).numberOfWords;
+
+            if (currentRoundIndex < totalWords) {
+              hasNextRound = true;
             } else {
-              socket.emit("game:player_lost", { userId, word: gameMode.word });
+              gameEnded = true;
             }
 
+            // NOW emit client events IMMEDIATELY for THIS player
+            if (hasNextRound) {
+              const nextRoundPayload = {
+                roundResult: finalResult,
+                word: previousWord,
+                timeTakenMs: previousTimeTakenMs,
+              };
+              socket.emit("game:next_round", nextRoundPayload);
+            } else {
+              // Final round — emit the terminal event for THIS player
+              if (finalResult === "won") {
+                const winPayload = { userId, timeTakenMs: previousTimeTakenMs, word: previousWord };
+                socket.emit("game:player_won", winPayload);
+              } else if (finalResult === "completed") {
+                socket.emit("game:player_completed", { userId, timeTakenMs: previousTimeTakenMs });
+              } else {
+                socket.emit("game:player_lost", { userId, word: previousWord });
+              }
+            }
+
+            // Perform DB updates in the background without blocking the client response
             if (roundEnded) {
-              // Finish current round
+              // Now we advance the game mode round index
+              if (hasNextRound) {
+                (gameMode as any).roundIndex = currentRoundIndex + 1;
+              }
+
               if (currentRoundId) {
                 dbPromises.push(
-                  supabase.from("game_rounds")
-                    .update({ status: "finished", finished_at: new Date().toISOString() })
-                    .eq("id", currentRoundId)
+                  finishGameRound(currentRoundId).catch(err => console.error("Failed to finish current round:", err.message))
                 );
               }
 
-              // Check if there's another round
-              const { data: roundData } = await supabase.from("game_rounds").select("round_index").eq("id", currentRoundId).single();
-              const { data: gameData } = await supabase.from("games").select("number_of_words, wordlist_id").eq("id", currentGameId).single();
+              if (hasNextRound) {
+                // Check socket still connected before creating next round
+                if (!socket.connected) {
+                  console.log("[next_round] Socket disconnected during round transition, abandoning");
+                  await abandonGameAndRound(currentGameId, currentRoundId!);
+                  delete activeGameInstances[currentGameId];
+                  await Promise.all(dbPromises);
+                  return;
+                }
 
-              if (roundData && gameData && roundData.round_index < gameData.number_of_words) {
-                // Instantly create next round
-                const { data: wordlistData } = await supabase.from("wordlists").select("words").eq("id", gameData.wordlist_id).single();
-                // Fetch already-used words to avoid repeats
-                const { data: usedRounds } = await supabase.from("game_rounds").select("word").eq("game_id", currentGameId);
-                const usedWords = new Set((usedRounds || []).map(r => r.word?.toLowerCase()));
-                const available = (wordlistData?.words || []).filter((w: string) => !usedWords.has(w.toLowerCase()));
-                const wordPool = available.length > 0 ? available : (wordlistData?.words || []);
-                if (wordPool.length > 0) {
-                  const newWord = wordPool[Math.floor(Math.random() * wordPool.length)];
-                  const { data: newRound } = await supabase.from("game_rounds").insert({
-                    game_id: currentGameId,
-                    round_index: roundData.round_index + 1,
-                    status: "in_progress", // start instantly
-                    word: newWord,
-                    started_at: new Date().toISOString()
-                  }).select("id").single();
+                try {
+                  const wordlistId = (gameMode as any).wordlistId;
+                  const words = await getWordlistWords(wordlistId);
+                  const usedWords = await getUsedWordsInGame(currentGameId);
+                  const available = words.filter((w: string) => !usedWords.has(w.toLowerCase()));
+                  const wordPool = available.length > 0 ? available : words;
 
-                  if (newRound) {
-                    const otherSockets = await socket.in(currentGameId).fetchSockets();
-                    const currentSockets = [...otherSockets, socket];
-                    const newRoundPlayersToInsert: { game_round_id: string, user_id: string }[] = [];
+                  if (wordPool.length > 0) {
+                    const newWord = wordPool[Math.floor(Math.random() * wordPool.length)];
 
-                    const { data: gamePlayers } = await supabase.from("game_players").select("user_id").eq("game_id", currentGameId);
-                    if (gamePlayers) {
-                      for (const gp of gamePlayers) {
-                        newRoundPlayersToInsert.push({ game_round_id: newRound.id, user_id: gp.user_id });
-                      }
-                      const { data: insertedPlayers } = await supabase.from("game_round_players").insert(newRoundPlayersToInsert).select("id, user_id");
+                    // Check socket AGAIN right before DB commit
+                    if (!socket.connected) {
+                      console.log("[next_round] Socket disconnected before round insert, abandoning");
+                      await abandonGameAndRound(currentGameId, currentRoundId!);
+                      delete activeGameInstances[currentGameId];
+                      await Promise.all(dbPromises);
+                      return;
+                    }
 
-                      if (insertedPlayers) {
-                        const playerMap = Object.fromEntries(insertedPlayers.map(p => [p.user_id, p.id]));
-                        for (const s of currentSockets) {
-                          if (s.data && s.data.user) {
-                            const uId = s.data.user.id;
-                            if (playerMap[uId]) {
-                              s.data.user.currentRoundId = newRound.id;
-                              s.data.user.currentRoundPlayerId = playerMap[uId];
+                    const newRound = await insertNewRound(currentGameId, (gameMode as any).roundIndex, newWord);
+
+                    if (newRound) {
+                      const gamePlayers = await getGamePlayers(currentGameId);
+
+                      if (gamePlayers) {
+                        const newRoundPlayersToInsert = gamePlayers.map(gp => ({ game_round_id: newRound.id, user_id: gp.user_id }));
+                        const insertedPlayers = await insertRoundPlayers(newRoundPlayersToInsert);
+
+                        if (insertedPlayers) {
+                          // If socket disconnected after insert, clean up the orphan immediately
+                          if (!socket.connected) {
+                            console.log("[next_round] Socket disconnected after round insert, cleaning up orphan");
+                            for (const ip of insertedPlayers) {
+                              await markPlayerAsDisconnected(ip.id);
+                            }
+                            await abandonGameAndRound(currentGameId, newRound.id);
+                            delete activeGameInstances[currentGameId];
+                            await Promise.all(dbPromises);
+                            return;
+                          }
+
+                          const playerMap = Object.fromEntries(insertedPlayers.map(p => [p.user_id, p.id]));
+                          const otherSockets = await socket.in(currentGameId).fetchSockets();
+                          const currentSockets = [...otherSockets, socket];
+                          for (const s of currentSockets) {
+                            if (s.data?.user) {
+                              const uId = s.data.user.id;
+                              if (playerMap[uId]) {
+                                s.data.user.currentRoundId = newRound.id;
+                                s.data.user.currentRoundPlayerId = playerMap[uId];
+                              }
                             }
                           }
                         }
                       }
-                    }
+                      gameMode.resetRound(newWord);
 
-                    gameMode.resetRound(newWord);
-                    const nextRoundPayload = { roundId: newRound.id, roundIndex: roundData.round_index + 1 };
-                    socket.to(currentGameId).emit("game:next_round", nextRoundPayload);
-                    socket.emit("game:next_round", nextRoundPayload);
+                      // Send the actual round details to the client
+                      const newRoundPayload = {
+                        maskedWord: gameMode.getMaskedWord(undefined),
+                        startTime: Date.now()
+                      };
+                      socket.to(currentGameId).emit("game:new_round_ready", newRoundPayload);
+                      socket.emit("game:new_round_ready", newRoundPayload);
+                    } else {
+                      // fallback if failed to create round
+                    }
                   } else {
-                    gameEnded = true;
+                    // fallback if wordpool empty
                   }
-                } else {
-                  gameEnded = true;
+                } catch (err: any) {
+                  console.error("FATAL ERROR IN NEXT ROUND LOGIC:", err);
                 }
-              } else {
-                gameEnded = true;
               }
             }
 
-            if (gameEnded) {
+            if (gameEnded && roundEnded) {
               dbPromises.push(
-                supabase.from("games")
-                  .update({ status: "finished", finished_at: new Date().toISOString() })
-                  .eq("id", currentGameId),
-                supabase.from("game_players")
-                  .update({ result: finalResult })
-                  .eq("game_id", currentGameId)
-                  .eq("user_id", userId)
+                finishGame(currentGameId).catch(err => console.error(err)),
+                updateGamePlayerResult(currentGameId, userId, finalResult).catch(err => console.error(err))
               );
               delete activeGameInstances[currentGameId];
             }

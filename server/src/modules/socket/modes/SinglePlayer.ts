@@ -16,6 +16,7 @@ export class Classic extends GameMode {
     processMove(userId: string, move: move, gameState: Partial<GameInfo>) {
         if (!this.players[userId]) {
             this.players[userId] = new Player(userId, this.lives);
+            this.totalPlayersCount++;
         }
 
         const player = this.players[userId];
@@ -47,6 +48,7 @@ export class Classic extends GameMode {
             const targetLetters = new Set(this.word.toLowerCase().split(''));
             let allGuessed = true;
             for (const letter of targetLetters) {
+                if (!/[a-z]/i.test(letter)) continue;
                 if (!player.move_set.includes(letter)) {
                     allGuessed = false;
                     break;
@@ -55,12 +57,15 @@ export class Classic extends GameMode {
 
             if (allGuessed) {
                 player.finish(this.startedAt);
+                this.completedPlayersCount++;
                 isCorrectCompletion = true;
                 if (!this.winner) {
                     this.winner = userId;
                     justWon = true;
                 }
             }
+        } else if (player.lives === 0) {
+            this.completedPlayersCount++;
         }
 
         return { player, processedMove, isWinner: justWon, isCorrectCompletion };
@@ -70,6 +75,8 @@ export class Classic extends GameMode {
         this.word = word;
         this.winner = null;
         this.players = {};
+        this.completedPlayersCount = 0;
+        this.totalPlayersCount = 0;
         this.startedAt = Date.now(); // Reset global clock for the new round
     }
 }

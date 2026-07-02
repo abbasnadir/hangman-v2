@@ -1,5 +1,6 @@
 'use client';
-import Image from 'next/image';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Heart, HeartCrack, Flag } from 'lucide-react';
 import Card from './Card';
 
 interface GameHeaderProps {
@@ -15,34 +16,47 @@ export const GameHeader = ({
   time,
   onGiveUp
 }: GameHeaderProps) => (
-  <div className="flex w-full justify-between items-center p-2 sm:p-8 pt-0">
-    <div className="flex h-min">
-      {[...Array(Math.max(0, lives))].map((_, i) => (
-        <Image 
-          src="/heart.png" 
-          width={30} 
-          height={30} 
-          alt="heart" 
-          key={`heart-${i}`} 
-          className="mr-1"
-        />
-      ))}
-      {[...Array(Math.max(0, totalLives - lives))].map((_, i) => (
-        <Image 
-          src="/broken_heart.png" 
-          width={30} 
-          height={30} 
-          alt="broken heart" 
-          key={`broken-${i}`}
-          className="mr-1"
-        />
-      ))}
+  <div className="flex w-full justify-between items-center p-4 sm:p-8 pt-4">
+    <div className="flex items-center bg-black/20 rounded-full px-4 py-2 border border-white/5">
+      <AnimatePresence>
+        {[...Array(totalLives)].map((_, i) => {
+          const isAlive = i < lives;
+          return (
+            <div key={`heart-${i}`} className="relative mr-2 last:mr-0">
+              {isAlive ? (
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  exit={{ scale: 0 }}
+                  transition={{ type: "spring", bounce: 0.5 }}
+                >
+                  <Heart className="w-6 h-6 sm:w-8 sm:h-8 text-rose-500 fill-rose-500 drop-shadow-[0_0_8px_rgba(244,63,94,0.6)]" />
+                </motion.div>
+              ) : (
+                <motion.div
+                  initial={{ scale: 1.5, opacity: 0, rotate: -45 }}
+                  animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <HeartCrack className="w-6 h-6 sm:w-8 sm:h-8 text-zinc-600" />
+                </motion.div>
+              )}
+            </div>
+          );
+        })}
+      </AnimatePresence>
     </div>
 
-    <div className="text-xl font-bold">{time}</div>
+    <div className="bg-black/30 backdrop-blur-sm px-6 py-2 rounded-full border border-white/5 text-xl font-bold font-mono tracking-wider shadow-inner text-white">
+      {time}
+    </div>
 
-    <Card onClick={onGiveUp} className="w-min whitespace-nowrap bg-red-600/80 text-white hover:bg-red-700/80">
-      Give Up
-    </Card>
+    <button 
+      onClick={onGiveUp} 
+      className="flex items-center gap-2 bg-rose-500 hover:bg-rose-400 text-rose-950 font-bold px-4 py-2 rounded-full transition-all hover:scale-105 active:scale-95 shadow-[0_0_10px_rgba(244,63,94,0.3)]"
+    >
+      <Flag className="w-4 h-4 sm:w-5 sm:h-5" /> 
+      <span className="hidden sm:inline">FORFEIT</span>
+    </button>
   </div>
 );

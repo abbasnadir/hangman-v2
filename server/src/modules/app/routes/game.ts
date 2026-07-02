@@ -25,8 +25,8 @@ const gameRouter: RouterObject = {
       handler: async (req: Request, res: Response) => {
         const wordlist: string = res.locals.query.wordlistId;
         const mode: number = res.locals.query.gamemode;
-        const lives: number = res.locals.query.lives;
-        const numberOfWords: number = res.locals.query.numberOfWords;
+        const lives: number = res.locals.query.totalLives;
+        const numberOfWords: number = res.locals.query.number_of_words;
 
         const { data: wordlistData, error: wordlistError } = await supabase
           .from("wordlists")
@@ -109,7 +109,72 @@ const gameRouter: RouterObject = {
           );
         }
         res.status(201).json({ gameId: newGame.id });
-      },
+      }
+    },
+    {
+      method: "post",
+      props: "/abandon",
+      authorization: "required",
+      rateLimit: "strict",
+      keyType: "user",
+      handler: async (req: Request, res: Response) => {
+        const userId = req.user.id;
+        const gameId = req.body?.gameId || req.query?.gameId;
+
+        if (!gameId) {
+          throw new BadRequestError("gameId is required");
+        }
+
+        // Verify the user is actually in this game
+        const { data: playerRecord } = await supabase
+          .from("game_players")
+          .select("id")
+          .eq("game_id", gameId)
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (!playerRecord) {
+          throw new NotFoundError("You are not a player in this game");
+        }
+
+        // Abandon the single in_progress round for this game
+        const { data: activeRound } = await supabase
+          .from("game_rounds")
+          .select("id")
+          .eq("game_id", gameId)
+          .eq("status", "in_progress")
+          .maybeSingle();
+
+        if (activeRound) {
+          // Mark all round players as disconnected
+          await supabase
+            .from("game_round_players")
+            .update({ left_at: new Date().toISOString(), result: "abandoned" })
+            .eq("game_round_id", activeRound.id)
+            .is("result", null);
+
+          await supabase
+            .from("game_rounds")
+            .update({ status: "abandoned", finished_at: new Date().toISOString() })
+            .eq("id", activeRound.id);
+        }
+
+        // Abandon the game itself
+        await supabase
+          .from("games")
+          .update({ status: "abandoned", finished_at: new Date().toISOString() })
+          .eq("id", gameId)
+          .in("status", ["created", "in_progress"]);
+
+        // Mark game_players as abandoned if no result yet
+        await supabase
+          .from("game_players")
+          .update({ result: "abandoned" })
+          .eq("game_id", gameId)
+          .is("result", null);
+
+        res.json({ success: true });
+      }
     },
   ],
 };

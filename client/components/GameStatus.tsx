@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect } from 'react';
-import Card from './Card';
+import { motion } from 'framer-motion';
+import { Trophy, Skull, Flag, Clock, ArrowRight, Home } from 'lucide-react';
 
 type GameResult = 'won' | 'lost' | 'completed' | 'abandoned';
 
@@ -11,6 +12,8 @@ interface GameStatusProps {
   time: string;
   onMenu: () => void;
   nextRound?: boolean;
+  nextRoundReady?: boolean;
+  onNextRound?: () => void;
 }
 
 export const GameStatus = ({
@@ -18,91 +21,136 @@ export const GameStatus = ({
   word,
   time,
   onMenu,
-  nextRound = false
+  nextRound = false,
+  nextRoundReady = true,
+  onNextRound
 }: GameStatusProps) => {
 
-  const getBackgroundColor = () => {
+  const getStatusConfig = () => {
     switch (result) {
       case 'won':
       case 'completed':
-        return 'bg-green-600';
+        return {
+          icon: <Trophy className="w-20 h-20 text-emerald-400" />,
+          color: 'from-emerald-900/80 to-emerald-950/90',
+          borderColor: 'border-emerald-500/30',
+          title: result === 'won' ? 'VICTORY' : 'COMPLETED',
+          subtitle: 'Brilliant deduction!'
+        };
       case 'lost':
-        return 'bg-red-600';
+        return {
+          icon: <Skull className="w-20 h-20 text-rose-400" />,
+          color: 'from-rose-900/80 to-rose-950/90',
+          borderColor: 'border-rose-500/30',
+          title: 'DEFEAT',
+          subtitle: 'Better luck next time!'
+        };
       case 'abandoned':
-        return 'bg-[#443939]';
+        return {
+          icon: <Flag className="w-20 h-20 text-zinc-400" />,
+          color: 'from-zinc-800/80 to-zinc-950/90',
+          borderColor: 'border-white/10',
+          title: 'ABANDONED',
+          subtitle: "You didn't even try :("
+        };
       default:
-        return 'bg-gray-800';
+        return {
+          icon: <Flag className="w-20 h-20 text-zinc-400" />,
+          color: 'from-zinc-800/80 to-zinc-950/90',
+          borderColor: 'border-white/10',
+          title: 'GAME OVER',
+          subtitle: ''
+        };
     }
   };
 
-  const getResultMessage = () => {
-    switch (result) {
-      case 'won':
-        return '🎉 You Win!';
-      case 'completed':
-        return '👏 You completed the word (Second place or later)';
-      case 'lost':
-        return '💀 You Lost!';
-      case 'abandoned':
-        return 'You Surrendered or Game Abandoned';
-      default:
-        return 'Game Over';
-    }
-  };
+  const config = getStatusConfig();
 
   useEffect(() => {
-    if (nextRound) return; // Disable shortcut if transitioning to next round
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' || e.key === 'Enter') {
         e.preventDefault();
-        onMenu();
+        if (nextRound) {
+            if (nextRoundReady && onNextRound) onNextRound();
+        } else {
+            onMenu();
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onMenu, nextRound]);
+  }, [onMenu, nextRound, nextRoundReady, onNextRound]);
 
   return (
-    <div className={`flex flex-col items-center justify-center w-full min-h-dvh text-white ${getBackgroundColor()} transition-colors duration-500`}>
-      <div className="max-w-md w-full px-4 text-center">
-        <h1 className="text-2xl sm:text-4xl font-bold mb-4">
-          The word was: {word}
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className={`fixed inset-0 z-50 flex flex-col items-center justify-center p-4 backdrop-blur-sm bg-black/60`}
+    >
+      <motion.div 
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        transition={{ type: "spring", bounce: 0.5 }}
+        className={`w-full max-w-lg bg-gradient-to-b ${config.color} border ${config.borderColor} rounded-3xl p-8 shadow-2xl flex flex-col items-center text-center`}
+      >
+        <motion.div 
+          initial={{ scale: 0, rotate: -180 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{ type: "spring", delay: 0.2 }}
+          className="mb-6 drop-shadow-2xl"
+        >
+          {config.icon}
+        </motion.div>
+        
+        <h1 className="text-5xl font-black mb-2 tracking-widest text-white drop-shadow-md">
+          {config.title}
         </h1>
         
-        <h2 className="text-4xl font-bold mb-6">
-          {getResultMessage()}
-        </h2>
+        <p className="text-xl text-zinc-300 font-semibold mb-8">
+          {config.subtitle}
+        </p>
 
-        {result === 'abandoned' && (
-          <p className="text-xl mb-6 italic">You didn&rsquo;t even try :(</p>
-        )}
-
-        <div className="bg-black/20 rounded-lg p-4 mb-8">
-          <p className="text-2xl">Time: {time}</p>
+        <div className="w-full bg-black/40 rounded-2xl p-6 mb-8 border border-white/5 flex flex-col items-center gap-2">
+          <p className="text-sm font-bold text-zinc-400 uppercase tracking-widest">The word was</p>
+          <p className="text-4xl font-black text-white tracking-widest mb-4">{word}</p>
+          
+          <div className="flex items-center gap-2 bg-black/50 px-4 py-2 rounded-xl text-zinc-300 font-mono text-sm border border-white/5">
+            <Clock className="w-4 h-4" />
+            <span>Time Taken: {time}</span>
+          </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row justify-center gap-4">
+        <div className="flex flex-col sm:flex-row w-full gap-4">
           {nextRound ? (
-            <div className="bg-black/40 text-white text-lg sm:text-xl px-8 py-3 rounded-lg animate-pulse">
-              Next Round Starting...
-            </div>
-          ) : (
-            <Card 
-              onClick={onMenu}
-              className="bg-black/40 text-white text-lg sm:text-xl px-8 py-3 hover:scale-105 transition-transform cursor-pointer"
+            <button 
+              onClick={nextRoundReady ? onNextRound : undefined}
+              disabled={!nextRoundReady}
+              className={`flex-1 flex items-center justify-center gap-3 rounded-full py-4 px-6 font-bold text-lg transition-all ${
+                nextRoundReady 
+                  ? 'bg-emerald-500 hover:bg-emerald-400 text-emerald-950 shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:scale-105 active:scale-95 cursor-pointer' 
+                  : 'bg-zinc-700 text-zinc-400 cursor-wait opacity-70'
+              }`}
             >
-              Main Menu
-            </Card>
+              {nextRoundReady ? (
+                <>Next Round <ArrowRight className="w-5 h-5" /></>
+              ) : 'Preparing...'}
+            </button>
+          ) : (
+            <button 
+              onClick={onMenu}
+              className="flex-1 flex items-center justify-center gap-3 bg-zinc-100 hover:bg-white text-zinc-900 rounded-full py-4 px-6 font-bold text-lg hover:scale-105 active:scale-95 transition-all shadow-xl cursor-pointer"
+            >
+              <Home className="w-5 h-5" /> Main Menu
+            </button>
           )}
         </div>
-        {!nextRound && (
-          <p className="mt-6 text-sm opacity-70">
-            Press ENTER to return to menu
-          </p>
-        )}
-      </div>
-    </div>
+        
+        <p className="mt-6 text-xs font-bold text-zinc-500 uppercase tracking-widest">
+          Press ENTER to {nextRound ? 'continue' : 'return'}
+        </p>
+      </motion.div>
+    </motion.div>
   );
 };
 

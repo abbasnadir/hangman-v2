@@ -4,10 +4,9 @@ import { supabase } from "@/lib/supabaseClient";
 import { useEffect, useState } from "react";
 import { useRouter } from 'next/navigation';
 import Card from "@/components/Card";
-import Image from "next/image";
+import { Gamepad2, Swords, History, LogIn, X, Play } from "lucide-react";
 import { GameAPI } from "@/lib/api/game";
 import { WordlistAPI, Wordlist } from "@/lib/api/wordlists";
-import { socketService } from "@/lib/socket/socketService";
 
 export default function Home() {
   const router = useRouter();
@@ -107,127 +106,134 @@ export default function Home() {
     if (!pendingActiveGame) return;
     setLoading(true);
     try {
-      await socketService.connect();
-      socketService.emit('game:join', { gameId: pendingActiveGame });
-      
-      // Wait a moment for join to process, then leave to trigger abandon logic
-      setTimeout(() => {
-        socketService.emit('game:leave', {});
-        socketService.disconnect();
-        setPendingActiveGame(null);
-        setLoading(false);
-        setError("Previous game abandoned. You can now start a new game.");
-      }, 1500);
-      
-    } catch (err) {
+      await GameAPI.abandonGame(pendingActiveGame);
+      setPendingActiveGame(null);
+      setLoading(false);
+      setError("Previous game abandoned. You can now start a new game.");
+    } catch (err: any) {
       console.error("Failed to abandon game:", err);
       setLoading(false);
-      setError("Failed to abandon previous game.");
+      setError(err.message || "Failed to abandon previous game.");
     }
   };
 
   return (
-    <div className={`bg-cover bg-center bg-[url('/background.jpg')] flex flex-col items-center justify-center w-full min-h-dvh py-2 overflow-hidden`}>
-      <h1 className="text-6xl font-bold text-shadow-sm text-shadow-black text-white flex mb-12 drop-shadow-xl">
-        Hangman
+    <div className="bg-[#171124] flex flex-col items-center justify-center w-full min-h-dvh py-2 overflow-hidden">
+      <h1 className="text-6xl sm:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-br from-violet-400 to-emerald-400 flex mb-12 drop-shadow-xl font-fredoka tracking-wide">
+        HANGMAN
       </h1>
 
-      <div className="relative flex flex-col items-center max-w-md w-full px-4">
-        {error && <div className="bg-red-500 text-white p-3 rounded mb-4 shadow text-center w-full">{error}</div>}
+      <div className="relative flex flex-col items-center max-w-md w-full px-4 font-quicksand">
+        {error && <div className="bg-rose-500 text-white p-3 rounded-xl mb-4 shadow-md text-center w-full font-bold">{error}</div>}
         
         {pendingActiveGame ? (
-          <div className="bg-black/60 backdrop-blur-xl p-8 rounded-2xl border border-red-500/50 w-full flex flex-col gap-6 text-center shadow-2xl">
-            <h2 className="text-2xl text-white font-bold">Active Game Found</h2>
-            <p className="text-white/80">You are already in an active game session. What would you like to do?</p>
+          <div className="bg-[#251A3D] p-8 rounded-3xl border-t border-rose-500/30 w-full flex flex-col gap-6 text-center shadow-2xl">
+            <h2 className="text-2xl text-white font-black font-fredoka tracking-wider">ACTIVE GAME FOUND</h2>
+            <p className="text-zinc-400 font-semibold text-sm">You are already in an active game session. What would you like to do?</p>
             <div className="flex gap-4">
               <button 
                 onClick={abandonActiveGame}
                 disabled={loading}
-                className="flex-1 bg-red-600 hover:bg-red-500 transition-colors text-white py-3 rounded-xl font-bold uppercase tracking-wider"
+                className="flex-1 bg-zinc-800 hover:bg-zinc-700 transition-colors text-zinc-300 py-3 rounded-xl font-bold uppercase tracking-wider shadow-inner"
               >
-                {loading ? 'Disconnecting...' : 'Disconnect'}
+                {loading ? 'WAIT...' : 'FORFEIT'}
               </button>
               <button 
                 onClick={() => router.push(`/game?id=${pendingActiveGame}`)}
                 disabled={loading}
-                className="flex-1 bg-green-500 hover:bg-green-400 transition-colors text-white py-3 rounded-xl font-bold uppercase tracking-wider"
+                className="flex-1 bg-emerald-500 hover:bg-emerald-400 transition-colors text-emerald-950 py-3 rounded-xl font-bold uppercase tracking-wider shadow-[0_0_15px_rgba(16,185,129,0.3)]"
               >
-                Rejoin Game
+                REJOIN
               </button>
             </div>
           </div>
         ) : !session ? (
-          <Card className="bg-primary text-white flex items-center justify-center w-64 h-16 relative overflow-clip circle" onClick={login}>
-            Login with Google to Play
+          <Card onClick={login} className="w-full sm:w-80 flex flex-col items-center justify-center gap-3 bg-violet-600 hover:bg-violet-500 border-violet-400/30 py-6">
+            <LogIn className="w-8 h-8 text-white mb-2" />
+            <span className="text-xl font-black text-white tracking-widest uppercase">Login to Play</span>
           </Card>
         ) : !showGameMenu ? (
-          <span className="flex flex-col sm:flex-row gap-4">
-            <Card className="bg-primary text-white flex items-center w-auto h-min gap-2 relative overflow-clip circle" onClick={handleOpenGameMenu}>
-              {loading ? "Loading..." : (
+          <div className="flex flex-col gap-4 w-full sm:w-80">
+            <Card onClick={handleOpenGameMenu} delay={0.1} className="flex items-center gap-4 bg-violet-600 hover:bg-violet-500 border-violet-400/30">
+              {loading ? (
+                <div className="text-center w-full font-black text-white tracking-widest uppercase">Loading...</div>
+              ) : (
                 <>
-                  <Image src="/singleplayer.png" alt="Single Player" width={30} height={30} className="m-1" />
-                  Play Online
+                  <div className="bg-white/20 p-3 rounded-2xl">
+                    <Gamepad2 className="w-6 h-6 text-white" />
+                  </div>
+                  <span className="text-xl font-black text-white tracking-widest uppercase">Play Online</span>
                 </>
               )}
             </Card>
-            <Card className="bg-zinc-800 text-white flex items-center w-auto h-min gap-2 relative overflow-clip circle opacity-50 cursor-not-allowed">
-              <Image src="/swords.png" alt="Multiplayer" width={30} height={30} className="m-1" />
-              Multiplayer (Coming Soon)
-            </Card>
-          </span>
-        ) : (
-          <div className="bg-black/40 backdrop-blur-md p-6 rounded-2xl border border-white/10 w-full flex flex-col gap-4">
-            <h2 className="text-2xl text-white font-bold mb-2">Game Setup</h2>
             
-            <div className="flex flex-col">
-              <label className="text-white/80 mb-1 text-sm font-semibold">Select Wordlist</label>
+            <Card delay={0.2} className="flex items-center gap-4 bg-zinc-800 border-white/5 opacity-50 cursor-not-allowed">
+              <div className="bg-white/10 p-3 rounded-2xl">
+                <Swords className="w-6 h-6 text-zinc-400" />
+              </div>
+              <span className="text-xl font-black text-zinc-400 tracking-widest uppercase text-left">Multiplayer<br/><span className="text-xs text-zinc-500">Coming Soon</span></span>
+            </Card>
+
+            <button 
+              onClick={() => router.push('/logs')}
+              className="mt-6 mx-auto bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-6 py-3 rounded-full border border-white/10 transition-colors font-bold flex items-center gap-2"
+            >
+              <History className="w-5 h-5" /> Match History
+            </button>
+          </div>
+        ) : (
+          <div className="bg-[#251A3D] p-6 sm:p-8 rounded-3xl border-t border-white/10 w-full flex flex-col gap-5 shadow-2xl">
+            <h2 className="text-2xl text-white font-black font-fredoka tracking-wider mb-2">GAME SETUP</h2>
+            
+            <div className="flex flex-col gap-1">
+              <label className="text-zinc-400 text-xs font-bold uppercase tracking-widest pl-1">Select Wordlist</label>
               <select 
-                className="bg-white/10 text-white border border-white/20 rounded-md p-2 outline-none focus:border-primary transition-colors"
+                className="bg-[#171124] text-white border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-violet-500 transition-colors font-semibold shadow-inner"
                 value={selectedWordlist}
                 onChange={(e) => setSelectedWordlist(e.target.value)}
               >
                 {wordlists.map(w => (
-                  <option key={w.id} value={w.id} className="text-black">{w.name} {w.default ? '(Default)' : ''}</option>
+                  <option key={w.id} value={w.id}>{w.name} {w.default ? '(Default)' : ''}</option>
                 ))}
               </select>
             </div>
 
-            <div className="flex flex-col">
-              <label className="text-white/80 mb-1 text-sm font-semibold">Game Mode</label>
+            <div className="flex flex-col gap-1">
+              <label className="text-zinc-400 text-xs font-bold uppercase tracking-widest pl-1">Game Mode</label>
               <select 
-                className="bg-white/10 text-white border border-white/20 rounded-md p-2 outline-none focus:border-primary transition-colors"
+                className="bg-[#171124] text-white border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-violet-500 transition-colors font-semibold shadow-inner"
                 value={selectedGamemode}
                 onChange={(e) => setSelectedGamemode(Number(e.target.value))}
               >
-                <option value={1} className="text-black">Classic Singleplayer (Mode ID: 1)</option>
+                <option value={1}>Classic Singleplayer</option>
               </select>
             </div>
 
-            <div className="flex flex-col">
-              <label className="text-white/80 mb-1 text-sm font-semibold">Number of Words</label>
+            <div className="flex flex-col gap-1">
+              <label className="text-zinc-400 text-xs font-bold uppercase tracking-widest pl-1">Number of Words</label>
               <input 
                 type="number"
                 min="1"
                 max="10"
-                className="bg-white/10 text-white border border-white/20 rounded-md p-2 outline-none focus:border-primary transition-colors"
+                className="bg-[#171124] text-white border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-violet-500 transition-colors font-semibold shadow-inner"
                 value={numberOfWords}
                 onChange={(e) => setNumberOfWords(Number(e.target.value))}
               />
             </div>
 
-            <div className="flex gap-4 mt-4">
+            <div className="flex gap-3 mt-4">
               <button 
                 onClick={() => setShowGameMenu(false)}
-                className="flex-1 bg-zinc-700/80 hover:bg-zinc-600 transition-colors text-white py-2 rounded-md font-semibold"
+                className="flex items-center justify-center gap-2 flex-1 bg-zinc-800 hover:bg-zinc-700 transition-colors text-white py-3 rounded-xl font-bold uppercase tracking-widest"
               >
-                Cancel
+                <X className="w-5 h-5" /> Cancel
               </button>
               <button 
                 onClick={createAndStartGame}
                 disabled={loading}
-                className="flex-1 bg-primary hover:bg-primary/80 transition-colors text-white py-2 rounded-md font-semibold"
+                className="flex items-center justify-center gap-2 flex-1 bg-violet-600 hover:bg-violet-500 transition-colors text-white py-3 rounded-xl font-bold uppercase tracking-widest shadow-[0_0_15px_rgba(139,92,246,0.3)]"
               >
-                {loading ? 'Starting...' : 'Start Game'}
+                {loading ? 'STARTING...' : <><Play className="w-5 h-5 fill-current" /> PLAY</>}
               </button>
             </div>
           </div>

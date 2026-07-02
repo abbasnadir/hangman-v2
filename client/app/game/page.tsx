@@ -36,6 +36,19 @@ function HangmanGameClient() {
     // It doesn't emit the word length. I will just render an empty board or wait.
     // For now, I will render the letters guessed. If I need the length, I might need an API change, but I can't change backend.
     // Let's just track guessed keys.
+    const [maskedWord, setMaskedWord] = useState<string[]>([]);
+
+    const [gameStartTime, setGameStartTime] = useState<number | null>(null);
+
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        if (status === 'playing' && gameStartTime) {
+            interval = setInterval(() => {
+                setDisplayTime(((Date.now() - gameStartTime) / 1000).toFixed(2) + 's');
+            }, 100);
+        }
+        return () => clearInterval(interval);
+    }, [status, gameStartTime]);
 
     const {
         connectToGame,
@@ -70,6 +83,12 @@ function HangmanGameClient() {
             setStatus('playing');
             setLives(TOTAL_LIVES);
             setPressedKeys(new Set());
+            if (data.maskedWord) {
+                setMaskedWord(data.maskedWord);
+            }
+            if (data.startTime) {
+                setGameStartTime(data.startTime);
+            }
         }
     });
 
@@ -79,8 +98,9 @@ function HangmanGameClient() {
             setPressedKeys(new Set(data.move_set.map((m: string) => m.toUpperCase())));
             setDisplayTime((data.timeTakenMs / 1000).toFixed(2) + 's');
             
-            // Note: Since backend doesn't provide partial word structure, 
-            // the UI will just rely on the end game events for the final word.
+            if (data.maskedWord) {
+                setMaskedWord(data.maskedWord);
+            }
         }
     });
 
@@ -102,20 +122,36 @@ function HangmanGameClient() {
         setGameResult('completed');
     });
 
+    const [nextRoundData, setNextRoundData] = useState<any>(null);
+
     useListener('game:next_round', (data) => {
-        // Show the user they won the round, but disable the menu button
+        // Server emits this instantly. We will wait for new_round_ready for the payload details.
         setStatus('round_transition');
-        
-        // After 2.5 seconds, reset the board and start the next round
-        setTimeout(() => {
-            setStatus('playing');
-            setGameResult(null);
-            setWord('');
-            setPressedKeys(new Set());
-            setLives(TOTAL_LIVES);
-            setDisplayTime("0.00s");
-        }, 2500);
+        setGameResult(data.roundResult || 'won');
+        setWord(data.word || '');
+        if (data.timeTakenMs) {
+            setDisplayTime((data.timeTakenMs / 1000).toFixed(2) + 's');
+        }
     });
+
+    useListener('game:new_round_ready', (data) => {
+        setNextRoundData(data);
+    });
+
+    const handleNextRound = () => {
+        if (!nextRoundData || !nextRoundData.startTime) return;
+        setStatus('playing');
+        setGameResult(null);
+        setWord('');
+        setMaskedWord(nextRoundData.maskedWord || []);
+        setPressedKeys(new Set());
+        setLives(TOTAL_LIVES);
+        if (nextRoundData.startTime) {
+            setGameStartTime(nextRoundData.startTime);
+        }
+        setDisplayTime("0.00s");
+        setNextRoundData(null);
+    };
 
     const handleKeyPress = useCallback((key: string) => {
         if (status !== 'playing') return;
@@ -152,8 +188,8 @@ function HangmanGameClient() {
 
     if (status === 'connecting' || status === 'waiting') {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-[url('/background.jpg')] bg-cover text-white">
-                <h2 className="text-3xl animate-pulse">Connecting to game...</h2>
+            <div className="flex min-h-screen items-center justify-center bg-zinc-950 text-white">
+                <h2 className="text-3xl animate-pulse font-fredoka">Connecting to game...</h2>
             </div>
         );
     }
@@ -161,17 +197,22 @@ function HangmanGameClient() {
     if ((status === 'ended' || status === 'round_transition') && gameResult) {
         return (
             <GameStatus
-                result={gameResult}
+                result={gameResult!}
                 word={word || '???'}
                 time={displayTime}
                 onMenu={() => router.push('/')}
                 nextRound={status === 'round_transition'}
+                nextRoundReady={!!nextRoundData?.startTime}
+                onNextRound={handleNextRound}
             />
         );
     }
 
+    const correctKeys = new Set(maskedWord.filter(c => c !== '_' && c !== ' ').map(c => c.toUpperCase()));
+    const wrongKeys = new Set(Array.from(pressedKeys).filter(k => !correctKeys.has(k)));
+
     return (
-        <div className="select-none bg-[url('/background.jpg')] bg-no-repeat bg-cover flex flex-col items-center justify-between w-full min-h-dvh py-2 overflow-hidden">
+        <div className="select-none bg-[#171124] flex flex-col items-center justify-between w-full min-h-dvh py-2 overflow-hidden relative">
             <GameHeader
                 lives={lives}
                 totalLives={TOTAL_LIVES}
@@ -179,22 +220,18 @@ function HangmanGameClient() {
                 onGiveUp={giveUp}
             />
 
-            {/* We don't have the word layout from backend yet in v2, so we show a generic playing indicator instead of WordDisplay */}
-            <div className="my-8 flex-1 flex flex-col items-center justify-center text-center px-4">
-                <h2 className="text-3xl font-bold text-gray-800 dark:text-white drop-shadow-md bg-white/20 px-8 py-4 rounded-xl">
-                    Guess the word!
-                </h2>
-                <p className="mt-4 text-lg text-gray-700 dark:text-gray-300 font-semibold drop-shadow-sm">
-                    {pressedKeys.size} letters tried
-                </p>
-            </div>
+            <WordDisplay 
+                wordArr={maskedWord} 
+                wordCount={maskedWord.join("").split(" ")} 
+            />
 
-            <div className="mb-4 overflow-x-scroll sm:m-0 w-full">
+            <div className="mb-4 overflow-x-auto sm:m-0 w-full px-2">
                 {keyboardLayout.map((row, rowIndex) => (
                     <KeyboardRow
                         key={rowIndex}
                         row={row}
-                        pressedKeys={pressedKeys}
+                        correctKeys={correctKeys}
+                        wrongKeys={wrongKeys}
                         onClick={handleKeyPress}
                     />
                 ))}
@@ -205,7 +242,7 @@ function HangmanGameClient() {
 
 export default function GamePage() {
     return (
-        <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-[url('/background.jpg')] bg-cover text-white"><h2 className="text-3xl">Loading...</h2></div>}>
+        <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-zinc-950 text-white"><h2 className="text-3xl font-fredoka">Loading...</h2></div>}>
             <HangmanGameClient />
         </Suspense>
     );
