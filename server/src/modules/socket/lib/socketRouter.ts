@@ -37,6 +37,7 @@ export default async function socketRouter(io: Server) {
     const socketRoutes: SocketRouteObject[] = [];
 
     for (const dir of directory) {
+      if (dir.name.endsWith('.d.ts') || dir.name.endsWith('.map')) continue;
       if (!/\.(ts|js|cjs|mjs)$/i.test(dir.name)) continue;
       const module = await import(path.join(parentDir, dir.name));
       const imported = module.default as SocketRouteObject;
