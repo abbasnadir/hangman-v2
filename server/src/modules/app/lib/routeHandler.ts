@@ -21,7 +21,7 @@ export async function routesHandler(): Promise<Router> {
     for (const dir of directory) {
       if (dir.isDirectory()) continue;
 
-      // Add more filename options if necessary
+      if (dir.name.endsWith('.d.ts') || dir.name.endsWith('.map')) continue;
       if (!/\.(ts|js|cjs|mjs)$/i.test(dir.name)) continue;
 
       const module = await import(path.join(parentDir, dir.name));
