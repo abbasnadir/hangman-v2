@@ -57,6 +57,19 @@ const gameRouter: RouterObject = {
           throw new NotFoundError("Game mode not found");
         }
 
+        // Cleanup old inactive games (status = 'created' but never joined)
+        const { data: staleGames } = await supabase
+          .from("games")
+          .select("id")
+          .eq("created_by", req.user.id)
+          .eq("status", "created");
+        
+        if (staleGames && staleGames.length > 0) {
+          const staleIds = staleGames.map(g => g.id);
+          await supabase.from("game_rounds").delete().in("game_id", staleIds);
+          await supabase.from("games").delete().in("id", staleIds);
+        }
+
         const gameData = await fetchUserActiveGameRound(req.user.id);
 
         if (gameData.length > 0) {

@@ -2,15 +2,15 @@ import { GameMode, type ProcessMoveResult } from "./defModes.js";
 import type { GameInfo, move } from "../../shared/types/GameInfo.js";
 import { Player } from "./Player.js";
 
-export class Classic extends GameMode {
+export class Multiplayer extends GameMode {
     winner: string | null = null;
 
     constructor(lives: number = 5) {
-        super("Classic", 1, 1, lives);
+        super("Multiplayer", 2, 50, lives);
     }
 
     satisfies(players_count: number): boolean {
-        return players_count === 1;
+        return players_count >= this.min_players && players_count <= this.max_players;
     }
 
     processMove(userId: string, move: move, _gameState: Partial<GameInfo>): ProcessMoveResult {
@@ -59,6 +59,7 @@ export class Classic extends GameMode {
                 player.finish(this.startedAt);
                 this.completedPlayersCount++;
                 isCorrectCompletion = true;
+                // First player to correctly guess the whole word wins
                 if (!this.winner) { this.winner = userId; justWon = true; }
             }
         } else if (player.lives === 0) {

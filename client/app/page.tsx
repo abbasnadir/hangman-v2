@@ -44,13 +44,16 @@ export default function Home() {
     });
   };
 
-  const handleOpenGameMenu = async () => {
+  const [loadingMode, setLoadingMode] = useState<number | null>(null);
+
+  const handleOpenGameMenu = async (mode: number) => {
     if (!session) {
       setError("You must be logged in to play online.");
       return;
     }
     
-    setLoading(true);
+    setLoadingMode(mode);
+    setSelectedGamemode(mode);
     setError('');
     
     try {
@@ -65,7 +68,7 @@ export default function Home() {
       console.error(err);
       setError(err.message || "Failed to load wordlists");
     } finally {
-      setLoading(false);
+      setLoadingMode(null);
     }
   };
 
@@ -86,6 +89,7 @@ export default function Home() {
         number_of_words: numberOfWords
       });
 
+      // Navigate to game board (which for multiplayer might act as lobby first)
       router.push(`/game?id=${res.gameId}`);
     } catch (err: any) {
       console.error(err);
@@ -148,14 +152,20 @@ export default function Home() {
             </div>
           </div>
         ) : !session ? (
-          <Card onClick={login} className="w-full sm:w-80 flex flex-col items-center justify-center gap-3 bg-violet-600 hover:bg-violet-500 border-violet-400/30 py-6">
-            <LogIn className="w-8 h-8 text-white mb-2" />
-            <span className="text-xl font-black text-white tracking-widest uppercase">Login to Play</span>
-          </Card>
+          <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-4 items-center justify-center">
+            <Card onClick={login} className="w-full sm:w-80 flex flex-col items-center justify-center gap-3 bg-violet-600 hover:bg-violet-500 border-violet-400/30 py-6">
+              <LogIn className="w-8 h-8 text-white mb-2" />
+              <span className="text-xl font-black text-white tracking-widest uppercase">Login to Play</span>
+            </Card>
+            <Card onClick={() => supabase.auth.signInAnonymously()} className="w-full sm:w-80 flex flex-col items-center justify-center gap-3 bg-emerald-600 hover:bg-emerald-500 border-emerald-400/30 py-6">
+              <LogIn className="w-8 h-8 text-white mb-2" />
+              <span className="text-xl font-black text-white tracking-widest uppercase">Play as Guest</span>
+            </Card>
+          </div>
         ) : !showGameMenu ? (
           <div className="flex flex-col gap-4 w-full sm:w-80">
-            <Card onClick={handleOpenGameMenu} delay={0.1} className="flex items-center gap-4 bg-violet-600 hover:bg-violet-500 border-violet-400/30">
-              {loading ? (
+            <Card onClick={() => handleOpenGameMenu(1)} delay={0.1} className="flex items-center gap-4 bg-violet-600 hover:bg-violet-500 border-violet-400/30">
+              {loadingMode === 1 ? (
                 <div className="text-center w-full font-black text-white tracking-widest uppercase">Loading...</div>
               ) : (
                 <>
@@ -167,11 +177,17 @@ export default function Home() {
               )}
             </Card>
             
-            <Card delay={0.2} className="flex items-center gap-4 bg-zinc-800 border-white/5 opacity-50 cursor-not-allowed">
-              <div className="bg-white/10 p-3 rounded-2xl">
-                <Swords className="w-6 h-6 text-zinc-400" />
-              </div>
-              <span className="text-xl font-black text-zinc-400 tracking-widest uppercase text-left">Multiplayer<br/><span className="text-xs text-zinc-500">Coming Soon</span></span>
+            <Card onClick={() => handleOpenGameMenu(2)} delay={0.2} className="flex items-center gap-4 bg-emerald-600 hover:bg-emerald-500 border-emerald-400/30">
+              {loadingMode === 2 ? (
+                <div className="text-center w-full font-black text-white tracking-widest uppercase">Loading...</div>
+              ) : (
+                <>
+                  <div className="bg-white/20 p-3 rounded-2xl">
+                    <Swords className="w-6 h-6 text-white" />
+                  </div>
+                  <span className="text-xl font-black text-white tracking-widest uppercase text-left">Multiplayer</span>
+                </>
+              )}
             </Card>
 
             <button 
@@ -183,7 +199,9 @@ export default function Home() {
           </div>
         ) : (
           <div className="bg-[#251A3D] p-6 sm:p-8 rounded-3xl border-t border-white/10 w-full flex flex-col gap-5 shadow-2xl">
-            <h2 className="text-2xl text-white font-black font-fredoka tracking-wider mb-2">GAME SETUP</h2>
+            <h2 className="text-2xl text-white font-black font-fredoka tracking-wider mb-2">
+              {selectedGamemode === 1 ? 'SINGLEPLAYER SETUP' : 'MULTIPLAYER SETUP'}
+            </h2>
             
             <div className="flex flex-col gap-1">
               <label className="text-zinc-400 text-xs font-bold uppercase tracking-widest pl-1">Select Wordlist</label>
@@ -195,17 +213,6 @@ export default function Home() {
                 {wordlists.map(w => (
                   <option key={w.id} value={w.id}>{w.name} {w.default ? '(Default)' : ''}</option>
                 ))}
-              </select>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-zinc-400 text-xs font-bold uppercase tracking-widest pl-1">Game Mode</label>
-              <select 
-                className="bg-[#171124] text-white border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-violet-500 transition-colors font-semibold shadow-inner"
-                value={selectedGamemode}
-                onChange={(e) => setSelectedGamemode(Number(e.target.value))}
-              >
-                <option value={1}>Classic Singleplayer</option>
               </select>
             </div>
 
