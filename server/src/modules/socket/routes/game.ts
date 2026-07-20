@@ -23,6 +23,7 @@ import {
 } from "../../shared/utils/dbQueries.js";
 import { Classic } from "../modes/SinglePlayer.js";
 import { Multiplayer } from "../modes/Multiplayer.js";
+import { Player } from "../modes/Player.js";
 import { GameMode, type DbFunctions } from "../modes/defModes.js";
 import { joinGamePayloadSchema, submitMovePayloadSchema } from "../schemas/gameProcessSchema.js";
 
@@ -78,10 +79,17 @@ export const gameRoute: SocketRouteObject = {
         const { gameId } = payload as z.infer<typeof joinGamePayloadSchema>;
         const userId = socket.data.user.id;
 
+        // Fetch profile once on join
+        if (!socket.data.user.username) {
+            const { data: profile } = await supabase.from('profiles').select('username, pfp').eq('id', userId).single();
+            socket.data.user.username = profile?.username ?? "Player";
+            socket.data.user.pfp = profile?.pfp ?? "";
+        }
+
         // 1. Game must exist and be joinable
         const { data: gameStatus, error: gameStatusError } = await supabase
           .from("games")
-          .select("status, mode_id, created_by")
+          .select("status, mode_id, created_by, total_lives, wordlist_id, number_of_words")
           .eq("id", gameId)
           .single();
 
@@ -128,7 +136,84 @@ export const gameRoute: SocketRouteObject = {
             socket.data.user.currentRoundPlayerId = roundPlayer?.id ?? null;
           }
 
-          socket.emit("game:join", { success: true, gameId, reconnected: true, isHost, modeId });
+          // Ensure a GameMode instance exists for this game (recreate if missing)
+          if (!activeGameInstances[gameId]) {
+            const gameMode: GameMode = modeId === 2 ? new Multiplayer(gameStatus.total_lives) : new Classic(gameStatus.total_lives);
+            // Load minimal state from DB (word, round index, startedAt)
+            const roundInfo = await supabase.from("game_rounds").select("word, round_index, started_at").eq("id", socket.data.user.currentRoundId).single();
+            if (!roundInfo.error && roundInfo.data) {
+              gameMode.word = roundInfo.data.word;
+              gameMode.roundIndex = roundInfo.data.round_index;
+              if (roundInfo.data.started_at) {
+                gameMode.startedAt = new Date(roundInfo.data.started_at).getTime();
+              }
+            }
+            // Set total player count based on current active players
+            const playersCount = await getActivePlayersCount(socket.data.user.currentRoundId);
+            gameMode.totalPlayersCount = playersCount;
+            activeGameInstances[gameId] = gameMode;
+          }
+
+          const gameMode = activeGameInstances[gameId];
+          let started = false;
+          let maskedWord: string[] | undefined = undefined;
+          let startTime: number | undefined = undefined;
+          let lives = gameStatus.total_lives;
+          let move_set: string[] = [];
+          let playersCount = gameMode ? gameMode.totalPlayersCount : 0;
+          if (!started && socket.data.user.currentRoundId) {
+             playersCount = await getActivePlayersCount(socket.data.user.currentRoundId);
+          }
+          
+          if (gameMode && gameMode.startedAt && gameStatus.status === 'in_progress') {
+             started = true;
+             startTime = gameMode.startedAt;
+             maskedWord = gameMode.getMaskedWord(userId);
+             
+             // Try to restore player state if not in memory
+             if (!gameMode.players[userId]) {
+                const { data: moves } = await supabase.from('game_moves').select('guess, correct, created_at').eq('round_id', socket.data.user.currentRoundId).eq('user_id', userId).order('created_at', { ascending: true });
+                if (moves) {
+                   const player = new Player(userId, gameStatus.total_lives);
+                   const targetLetters = new Set(gameMode.word.toLowerCase().replace(/[^a-z]/g, ""));
+                   for (const move of moves) {
+                      player.recordGuess(move.guess, move.correct, startTime || Date.now());
+                      if (move.correct || player.lives <= 0) {
+                         const allGuessed = [...targetLetters].every(l => player.move_set.includes(l));
+                         if (allGuessed || player.lives <= 0) {
+                            if (!player.completed) {
+                               player.completed = true;
+                               player.finalTime = move.created_at ? new Date(move.created_at).getTime() - (startTime || 0) : 0;
+                               gameMode.completedPlayersCount++;
+                            }
+                         }
+                      }
+                   }
+                   gameMode.players[userId] = player;
+                }
+             }
+             
+             if (gameMode.players[userId]) {
+                 lives = gameMode.players[userId].lives;
+                 move_set = gameMode.players[userId].move_set;
+                 maskedWord = gameMode.getMaskedWord(userId); // update after player reconstruction
+             }
+          }
+
+          socket.emit("game:join", { 
+            success: true, 
+            gameId, 
+            reconnected: true, 
+            isHost, 
+            modeId,
+            playersCount,
+            started,
+            maskedWord,
+            startTime,
+            lives,
+            move_set
+          });
+          socket.to(gameId).emit("game:player_joined", { userId, playersCount });
           return;
         }
 
@@ -191,7 +276,7 @@ export const gameRoute: SocketRouteObject = {
           socket.emit("game:start", { success: false, error: "You must join a game before starting it." });
           return;
         }
-        if (activeGameInstances[currentGameId]) {
+        if (activeGameInstances[currentGameId] && activeGameInstances[currentGameId].startedAt) {
           socket.emit("game:start", { success: false, error: "This game has already been started." });
           return;
         }
@@ -295,43 +380,89 @@ export const gameRoute: SocketRouteObject = {
           const move = payload as z.infer<typeof submitMovePayloadSchema>;
 
           // Delegate everything to GameMode
-          const { moveResponse, finishResult } = await gameMode.onMoveSubmitted(
-            userId, move, currentGameId, currentRoundId, db, () => socket.connected
+          const { moveResponse, finishPromise } = gameMode.onMoveSubmitted(
+            userId, move, currentGameId, currentRoundId, db, () => socket.connected,
+            socket.data.user.username, socket.data.user.pfp
           );
 
-          // Emit move response to this player
+          // Emit move response to this player IMMEDIATELY
           socket.emit("game:submit_move", moveResponse);
 
-          // If the player finished, emit all finish-related events
-          if (finishResult) {
-            socket.emit(finishResult.playerEvent.name, finishResult.playerEvent.payload);
-            socket.to(currentGameId).emit("game:player_finished_broadcast", finishResult.broadcastPayload);
+          // If the player finished, wait for orchestration and emit all finish-related events
+          if (finishPromise) {
+            const finishResult = await finishPromise;
+            if (finishResult) {
+                socket.emit(finishResult.playerEvent.name, finishResult.playerEvent.payload);
+                socket.to(currentGameId).emit("game:player_finished_broadcast", finishResult.broadcastPayload);
 
-            if (finishResult.roundEnded) {
-              if (finishResult.nextRound) {
-                // Patch socket.data for all sockets in the room with new round IDs
-                const allSockets = [...await socket.in(currentGameId).fetchSockets(), socket];
-                for (const s of allSockets) {
-                  const uid = s.data?.user?.id;
-                  if (uid && finishResult.nextRound.playerMap[uid]) {
-                    s.data.user.currentRoundId = finishResult.nextRound.id;
-                    s.data.user.currentRoundPlayerId = finishResult.nextRound.playerMap[uid];
+                if (finishResult.roundEnded) {
+                  if (finishResult.nextRoundPromise) {
+                    const nextRound = await finishResult.nextRoundPromise;
+                    if (nextRound) {
+                      // Patch socket.data for all sockets in the room with new round IDs
+                      const allSockets = [...await socket.in(currentGameId).fetchSockets(), socket];
+                      for (const s of allSockets) {
+                        const uid = s.data?.user?.id;
+                        if (uid && nextRound.playerMap[uid]) {
+                          s.data.user.currentRoundId = nextRound.id;
+                          s.data.user.currentRoundPlayerId = nextRound.playerMap[uid];
+                        }
+                      }
+                      const newRoundPayload = { maskedWord: nextRound.maskedWord, startTime: nextRound.startTime };
+                      socket.to(currentGameId).emit("game:new_round_ready", newRoundPayload);
+                      socket.emit("game:new_round_ready", newRoundPayload);
+                    }
+                  } else {
+                    const scores = 'scores' in gameMode ? (gameMode as any).scores : {};
+                    const maxScore = Math.max(0, ...Object.values(scores) as number[]);
+                    const winners = Object.keys(scores).filter(id => (scores as Record<string, number>)[id] === maxScore);
+                    const allSockets = [...await socket.in(currentGameId).fetchSockets(), socket];
+                    for (const s of allSockets) {
+                      const uid = s.data?.user?.id;
+                      const result = winners.includes(uid) ? "won" : "lost";
+                      s.emit("game:fully_completed", { success: true, finalScores: scores, result });
+                    }
+                    delete activeGameInstances[currentGameId];
                   }
                 }
-                const newRoundPayload = { maskedWord: finishResult.nextRound.maskedWord, startTime: finishResult.nextRound.startTime };
-                socket.to(currentGameId).emit("game:new_round_ready", newRoundPayload);
-                socket.emit("game:new_round_ready", newRoundPayload);
-
-              } else if (finishResult.gameFullyEnded) {
-                delete activeGameInstances[currentGameId];
-                socket.to(currentGameId).emit("game:fully_completed", { success: true });
-                socket.emit("game:fully_completed", { success: true });
-              }
             }
           }
         } catch (error: unknown) {
           socket.emit("game:submit_move", { success: false, error: error instanceof Error ? error.message : String(error) });
         }
+      },
+    },
+    {
+      event: "start_next_round",
+      auth: "required",
+      rateLimit: "strict",
+      handler: async (socket) => {
+        const userId = socket.data.user.id;
+        const currentGameId = socket.data.user.currentGameId;
+
+        if (!currentGameId) {
+          socket.emit("game:started_round", { success: false, error: "Not in a game." });
+          return;
+        }
+
+        const gameMode = activeGameInstances[currentGameId];
+        if (!gameMode) {
+          socket.emit("game:started_round", { success: false, error: "Game not started or session lost." });
+          return;
+        }
+
+        if (!gameMode.players[userId]) {
+          gameMode.players[userId] = new Player(userId, gameMode.lives);
+          if ('scores' in gameMode && (gameMode as any).scores[userId] === undefined) {
+              (gameMode as any).scores[userId] = 0;
+          }
+        }
+
+        const player = gameMode.players[userId];
+        const now = Date.now();
+        player.startRound(now);
+
+        socket.emit("game:started_round", { success: true, startTime: now });
       },
     },
 
@@ -365,10 +496,15 @@ export const gameRoute: SocketRouteObject = {
               if (gameAbandoned) delete activeGameInstances[currentGameId];
             } else {
               // Game hasn't started yet — clean up directly via DB
-              await markPlayerAsDisconnected(currentRoundPlayerId);
-              const remaining = await getActivePlayersCount(currentRoundId);
+              await db.markPlayerAsDisconnected(currentRoundPlayerId);
+              // Decrement total player count for this game instance if it exists
+              const gameMode = activeGameInstances[currentGameId];
+              if (gameMode) {
+                  gameMode.totalPlayersCount = Math.max(0, gameMode.totalPlayersCount - 1);
+              }
+              const remaining = await db.getActivePlayersCount(currentRoundId);
               if (remaining === 0) {
-                await abandonGameAndRound(currentGameId, currentRoundId);
+                  await db.abandonGameAndRound(currentGameId, currentRoundId);
               }
             }
           }

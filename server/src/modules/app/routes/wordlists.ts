@@ -96,7 +96,7 @@ const wordlistsRouter: RouterObject = {
     {
       method: "post",
       props: "/me/",
-      authorization: "required",
+      authorization: "non-guest",
       rateLimit: "strict",
       keyType: "user",
       zodSchema: z.object({
@@ -148,7 +148,7 @@ const wordlistsRouter: RouterObject = {
     {
       method: "patch",
       props: "/me/",
-      authorization: "required",
+      authorization: "non-guest",
       rateLimit: "strict",
       keyType: "user",
       zodSchema: z.object({
@@ -236,7 +236,7 @@ const wordlistsRouter: RouterObject = {
     {
       method: "delete",
       props: "/me/",
-      authorization: "required",
+      authorization: "non-guest",
       rateLimit: "strict",
       keyType: "user",
       zodSchema: z.object({

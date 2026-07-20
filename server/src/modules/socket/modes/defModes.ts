@@ -48,13 +48,13 @@ export interface PlayerFinishedResult {
      * Populated only when roundEnded === true AND the game has more rounds.
      * Contains everything needed to transition sockets to the new round.
      */
-    nextRound: {
+    nextRoundPromise?: Promise<{
         id: string;
         maskedWord: string[];
         startTime: number;
         /** userId → roundPlayerId mapping, so the route can patch socket.data on all sockets. */
         playerMap: Record<string, string>;
-    } | null;
+    } | null>;
     /** True when roundEnded === true AND there are no more rounds (game over). */
     gameFullyEnded: boolean;
 }
@@ -64,8 +64,8 @@ export interface PlayerFinishedResult {
 export interface MoveSubmittedResult {
     /** Payload for the `game:submit_move` response to this player. */
     moveResponse: Record<string, unknown>;
-    /** If the player finished, contains the full finish orchestration result. */
-    finishResult: PlayerFinishedResult | null;
+    /** If the player finished, contains a promise to the full finish orchestration result. */
+    finishPromise: Promise<PlayerFinishedResult | null>;
 }
 
 // ─── What onPlayerLeave returns ─────────────────────────────────────────────
@@ -139,14 +139,16 @@ export abstract class GameMode {
      * Process a player's move, persist it to DB, and handle finish logic if they completed.
      * Returns everything the route needs to emit — the route does ZERO game logic.
      */
-    async onMoveSubmitted(
+    onMoveSubmitted(
         userId: string,
         move: move,
         gameId: string,
         roundId: string,
         db: DbFunctions,
-        checkSocketConnected: () => boolean
-    ): Promise<MoveSubmittedResult> {
+        checkSocketConnected: () => boolean,
+        username?: string,
+        pfp?: string
+    ): MoveSubmittedResult {
         const { player, processedMove, playerResult } = this.processMove(userId, move, {});
 
         // Build the immediate move response for this player
@@ -175,15 +177,15 @@ export abstract class GameMode {
 
         // Player still playing — just return the move response
         if (playerResult === "in_progress") {
-            return { moveResponse, finishResult: null };
+            return { moveResponse, finishPromise: Promise.resolve(null) };
         }
 
         // Player finished — delegate full orchestration to onPlayerFinished
-        const finishResult = await this.onPlayerFinished(
-            userId, playerResult, gameId, roundId, db, checkSocketConnected
+        const finishPromise = this.onPlayerFinished(
+            userId, playerResult, gameId, roundId, db, checkSocketConnected, username, pfp
         );
 
-        return { moveResponse, finishResult };
+        return { moveResponse, finishPromise };
     }
 
     /**
@@ -225,7 +227,9 @@ export abstract class GameMode {
         gameId: string,
         roundId: string,
         db: DbFunctions,
-        checkSocketConnected: () => boolean
+        checkSocketConnected: () => boolean,
+        cachedUsername?: string,
+        cachedPfp?: string
     ): Promise<PlayerFinishedResult> {
         const player = this.players[userId];
         if (!player) throw new Error(`Player ${userId} not found in game state.`);
@@ -235,33 +239,35 @@ export abstract class GameMode {
 
         // Fetch display profile (non-blocking; errors fall back to defaults)
         const profile = await db.getProfile(userId).catch(() => null);
-        const username = profile?.username ?? "Player";
-        const pfp = profile?.pfp ?? "";
+        const username = cachedUsername || profile?.username || "Player";
+        const pfp = cachedPfp || profile?.pfp || "";
 
         // Persist round-player result
         const dbPromises: PromiseLike<unknown>[] = [];
         dbPromises.push(db.updateRoundPlayerResult(roundId, userId, playerResult).catch(console.error));
 
+        const currentScore = 'scores' in this ? (this as any).scores[userId] || 0 : 0;
+
         // ── Build the event that goes to THIS player ────────────────────────
         const playerEvent: PlayerFinishedResult["playerEvent"] = hasNextRound
             ? {
                 name: "game:next_round",
-                payload: { roundResult: playerResult, word: previousWord, timeTakenMs, username, pfp }
+                payload: { roundResult: playerResult, word: previousWord, timeTakenMs, username, pfp, score: currentScore }
               }
             : playerResult === "won"
-            ? { name: "game:player_won", payload: { userId, timeTakenMs, word: previousWord, username, pfp } }
+            ? { name: "game:player_won", payload: { userId, timeTakenMs, word: previousWord, username, pfp, score: currentScore } }
             : playerResult === "completed"
-            ? { name: "game:player_completed", payload: { userId, timeTakenMs, username, pfp } }
-            : { name: "game:player_lost", payload: { userId, word: previousWord, username, pfp } };
+            ? { name: "game:player_completed", payload: { userId, timeTakenMs, username, pfp, score: currentScore } }
+            : { name: "game:player_lost", payload: { userId, word: previousWord, username, pfp, score: currentScore } };
 
         // ── Build the broadcast that goes to all OTHER players ──────────────
-        const broadcastPayload = { userId, result: playerResult, timeTakenMs, lives: player.lives, username, pfp };
+        const broadcastPayload = { userId, result: playerResult, timeTakenMs, lives: player.lives, username, pfp, score: currentScore };
 
         const roundEnded = this.completedPlayersCount >= this.totalPlayersCount;
 
         if (!roundEnded) {
-            await Promise.all(dbPromises);
-            return { playerEvent, broadcastPayload, roundEnded: false, nextRound: null, gameFullyEnded: false };
+            Promise.all(dbPromises).catch(console.error); // fire and forget
+            return { playerEvent, broadcastPayload, roundEnded: false, gameFullyEnded: false };
         }
 
         // ── Everyone is done with this round ────────────────────────────────
@@ -271,74 +277,77 @@ export abstract class GameMode {
             // ── Game is fully over ──────────────────────────────────────────
             dbPromises.push(db.finishGame(gameId).catch(console.error));
             dbPromises.push(db.updateGamePlayerResult(gameId, userId, playerResult).catch(console.error));
-            await Promise.all(dbPromises);
-            return { playerEvent, broadcastPayload, roundEnded: true, nextRound: null, gameFullyEnded: true };
+            Promise.all(dbPromises).catch(console.error); // fire and forget
+            return { playerEvent, broadcastPayload, roundEnded: true, gameFullyEnded: true };
         }
 
         // ── Transition to next round ────────────────────────────────────────
 
-        if (!checkSocketConnected()) {
-            console.log("[next_round] Socket disconnected during round transition, abandoning");
-            await db.abandonGameAndRound(gameId, roundId);
-            await Promise.all(dbPromises);
-            throw new Error("Socket disconnected during round transition.");
-        }
-
-        this.roundIndex += 1;
-
-        const words = await db.getWordlistWords(this.wordlistId);
-        const usedWords = await db.getUsedWordsInGame(gameId);
-        const available = words.filter((w: string) => !usedWords.has(w.toLowerCase()));
-        const wordPool = available.length > 0 ? available : words;
-        const newWord: string = wordPool[Math.floor(Math.random() * wordPool.length)] as string;
-        if (!newWord) throw new Error("Word pool is empty.");
-
-        if (!checkSocketConnected()) {
-            console.log("[next_round] Socket disconnected before round insert, abandoning");
-            await db.abandonGameAndRound(gameId, roundId);
-            await Promise.all(dbPromises);
-            throw new Error("Socket disconnected before round insert.");
-        }
-
-        const newRound = await db.insertNewRound(gameId, this.roundIndex, newWord);
-        if (!newRound) throw new Error("Failed to create next round in DB.");
-
-        const gamePlayers = await db.getGamePlayers(gameId);
-        if (!gamePlayers) throw new Error("Failed to fetch game players for next round.");
-
-        const insertedPlayers = await db.insertRoundPlayers(
-            gamePlayers.map(gp => ({ game_round_id: newRound.id, user_id: gp.user_id }))
-        );
-
-        if (!insertedPlayers) throw new Error("Failed to insert round players for next round.");
-
-        if (!checkSocketConnected()) {
-            console.log("[next_round] Socket disconnected after round insert, cleaning up orphan");
-            for (const ip of insertedPlayers) {
-                await db.markPlayerAsDisconnected(ip.id);
+        const setupNextRound = async () => {
+            if (!checkSocketConnected()) {
+                console.log("[next_round] Socket disconnected during round transition, abandoning");
+                await db.abandonGameAndRound(gameId, roundId);
+                await Promise.all(dbPromises);
+                throw new Error("Socket disconnected during round transition.");
             }
-            await db.abandonGameAndRound(gameId, newRound.id);
+
+            this.roundIndex += 1;
+
+            const words = await db.getWordlistWords(this.wordlistId);
+            const usedWords = await db.getUsedWordsInGame(gameId);
+            const available = words.filter((w: string) => !usedWords.has(w.toLowerCase()));
+            const wordPool = available.length > 0 ? available : words;
+            const newWord: string = wordPool[Math.floor(Math.random() * wordPool.length)] as string;
+            if (!newWord) throw new Error("Word pool is empty.");
+
+            if (!checkSocketConnected()) {
+                console.log("[next_round] Socket disconnected before round insert, abandoning");
+                await db.abandonGameAndRound(gameId, roundId);
+                await Promise.all(dbPromises);
+                throw new Error("Socket disconnected before round insert.");
+            }
+
+            const newRound = await db.insertNewRound(gameId, this.roundIndex, newWord);
+            if (!newRound) throw new Error("Failed to create next round in DB.");
+
+            const gamePlayers = await db.getGamePlayers(gameId);
+            if (!gamePlayers) throw new Error("Failed to fetch game players for next round.");
+
+            const insertedPlayers = await db.insertRoundPlayers(
+                gamePlayers.map(gp => ({ game_round_id: newRound.id, user_id: gp.user_id }))
+            );
+
+            if (!insertedPlayers) throw new Error("Failed to insert round players for next round.");
+
+            if (!checkSocketConnected()) {
+                console.log("[next_round] Socket disconnected after round insert, cleaning up orphan");
+                for (const ip of insertedPlayers) {
+                    await db.markPlayerAsDisconnected(ip.id);
+                }
+                await db.abandonGameAndRound(gameId, newRound.id);
+                await Promise.all(dbPromises);
+                throw new Error("Socket disconnected after round insert.");
+            }
+
+            const playerMap = Object.fromEntries(insertedPlayers.map(p => [p.user_id, p.id]));
+
+            this.resetRound(newWord);
+
             await Promise.all(dbPromises);
-            throw new Error("Socket disconnected after round insert.");
-        }
 
-        const playerMap = Object.fromEntries(insertedPlayers.map(p => [p.user_id, p.id]));
-
-        // Reset in-memory state for the new round (also resets startedAt)
-        this.resetRound(newWord);
-
-        await Promise.all(dbPromises);
+            return {
+                id: newRound.id,
+                maskedWord: this.getMaskedWord(undefined),
+                startTime: this.startedAt,
+                playerMap
+            };
+        };
 
         return {
             playerEvent,
             broadcastPayload,
             roundEnded: true,
-            nextRound: {
-                id: newRound.id,
-                maskedWord: this.getMaskedWord(undefined),
-                startTime: this.startedAt,
-                playerMap
-            },
+            nextRoundPromise: setupNextRound(),
             gameFullyEnded: false
         };
     }

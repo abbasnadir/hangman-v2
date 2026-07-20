@@ -19,7 +19,7 @@ export function authHandler(authType: authorization): SocketMiddleware {
 
     const handshakeToken = socket.handshake.auth?.token;
 
-    if (authType === "required") {
+    if (authType === "required" || authType === "non-guest") {
       if (handshakeToken == null || handshakeToken === "") {
         return next(new UnauthorizedError("Authentication required"));
       }
@@ -33,6 +33,11 @@ export function authHandler(authType: authorization): SocketMiddleware {
 
     try {
       await authenticateSocket(socket);
+      
+      if (authType === "non-guest" && socket.data.user?.is_anonymous) {
+        return next(new UnauthorizedError("Guest accounts are not permitted to perform this action."));
+      }
+
       return next();
     } catch (err) {
       return next(

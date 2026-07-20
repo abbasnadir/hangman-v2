@@ -60,6 +60,7 @@ function HangmanGameClient() {
     const {
         connectToGame,
         startGame,
+        startNextRound,
         submitMove,
         leaveGame,
         useListener
@@ -76,7 +77,16 @@ function HangmanGameClient() {
 
     useListener('game:join', (data) => {
         if (data.success) {
-            setStatus('waiting');
+            if (data.reconnected && data.started) {
+                setStatus('playing');
+                setLives(data.lives ?? TOTAL_LIVES);
+                setPressedKeys(new Set(data.move_set?.map((m: string) => m.toUpperCase()) || []));
+                if (data.maskedWord) setMaskedWord(data.maskedWord);
+                if (data.startTime) setGameStartTime(data.startTime);
+            } else {
+                setStatus('waiting');
+            }
+            
             const parsedModeId = Number(data.modeId);
             setModeId(parsedModeId);
             setIsHost(data.isHost);
@@ -85,8 +95,8 @@ function HangmanGameClient() {
                 setLobbyPlayersCount(data.playersCount);
             }
 
-            // Auto-start only for single player
-            if (parsedModeId === 1) {
+            // Auto-start only for single player if not reconnected/started
+            if (parsedModeId === 1 && !data.started) {
                 startGame();
             }
         } else {
@@ -160,7 +170,7 @@ function HangmanGameClient() {
         setDisplayTime((data.timeTakenMs / 1000).toFixed(2) + 's');
         if (modeId === 2) {
             setShowMultiplayerLeaderboard(true);
-            setFinishedPlayers(prev => [...prev, { userId: data.userId || 'You', username: data.username || 'You', pfp: data.pfp, result: 'won', timeTakenMs: data.timeTakenMs, lives }]);
+            setFinishedPlayers(prev => [...prev, { userId: data.userId || 'You', username: data.username || 'You', pfp: data.pfp, result: 'won', timeTakenMs: data.timeTakenMs, lives, score: data.score }]);
         }
     });
 
@@ -170,7 +180,7 @@ function HangmanGameClient() {
         setWord(data.word);
         if (modeId === 2) {
             setShowMultiplayerLeaderboard(true);
-            setFinishedPlayers(prev => [...prev, { userId: data.userId || 'You', username: data.username || 'You', pfp: data.pfp, result: 'lost', timeTakenMs: 0, lives: 0 }]);
+            setFinishedPlayers(prev => [...prev, { userId: data.userId || 'You', username: data.username || 'You', pfp: data.pfp, result: 'lost', timeTakenMs: 0, lives: 0, score: data.score }]);
         }
     });
 
@@ -180,7 +190,7 @@ function HangmanGameClient() {
         setDisplayTime((data.timeTakenMs / 1000).toFixed(2) + 's');
         if (modeId === 2) {
             setShowMultiplayerLeaderboard(true);
-            setFinishedPlayers(prev => [...prev, { userId: data.userId || 'You', username: data.username || 'You', pfp: data.pfp, result: 'completed', timeTakenMs: data.timeTakenMs, lives }]);
+            setFinishedPlayers(prev => [...prev, { userId: data.userId || 'You', username: data.username || 'You', pfp: data.pfp, result: 'completed', timeTakenMs: data.timeTakenMs, lives, score: data.score }]);
         }
     });
 
@@ -193,7 +203,7 @@ function HangmanGameClient() {
         setDisplayTime((data.timeTakenMs / 1000).toFixed(2) + 's');
         if (modeId === 2) {
             setShowMultiplayerLeaderboard(true);
-            setFinishedPlayers(prev => [...prev, { userId: data.userId || 'You', username: data.username || 'You', pfp: data.pfp, result: data.roundResult, timeTakenMs: data.timeTakenMs, lives }]);
+            setFinishedPlayers(prev => [...prev, { userId: data.userId || 'You', username: data.username || 'You', pfp: data.pfp, result: data.roundResult, timeTakenMs: data.timeTakenMs, lives, score: data.score }]);
         }
     });
 
@@ -209,8 +219,12 @@ function HangmanGameClient() {
         setIsFullyCompleted(true);
     });
 
-    useListener('game:fully_completed', () => {
+    useListener('game:fully_completed', (data) => {
         setIsFullyCompleted(true);
+        if (data && data.result) {
+            setGameResult(data.result);
+            setStatus('ended');
+        }
     });
 
     const handleNextRound = () => {
@@ -219,14 +233,19 @@ function HangmanGameClient() {
         setGameResult(null);
         setWord('');
         setMaskedWord(nextRoundData.maskedWord || []);
-        setPressedKeys(new Set());
         setLives(TOTAL_LIVES);
-        if (nextRoundData.startTime) {
-            setGameStartTime(nextRoundData.startTime);
-        }
+        setPressedKeys(new Set());
+        setFinishedPlayers([]);
         setDisplayTime("0.00s");
         setNextRoundData(null);
+        startNextRound();
     };
+
+    useListener('game:started_round', (data) => {
+        if (data.success && data.startTime) {
+            setGameStartTime(data.startTime);
+        }
+    });
 
     const handleKeyPress = useCallback((key: string) => {
         if (status !== 'playing') return;
@@ -368,9 +387,9 @@ function HangmanGameClient() {
                         <div className="w-full bg-zinc-900/50 rounded-xl p-4 border border-white/5 max-h-[250px] overflow-y-auto">
                             <div className="flex justify-between items-center mb-2 px-2 pb-2 border-b border-white/10 text-xs font-bold text-zinc-400 uppercase tracking-widest">
                                 <span>Player</span>
-                                <span>Time</span>
+                                <span>Score / Time</span>
                             </div>
-                            {[...finishedPlayers].sort((a, b) => a.timeTakenMs - b.timeTakenMs).map((p, idx) => (
+                            {[...finishedPlayers].sort((a, b) => (b.score || 0) - (a.score || 0) || a.timeTakenMs - b.timeTakenMs).map((p, idx) => (
                                 <div key={idx} className="flex justify-between items-center py-2 px-2 rounded-lg hover:bg-white/5 transition-colors">
                                     <span className="text-white font-medium flex items-center gap-2">
                                         {p.pfp && <img src={p.pfp} alt="Avatar" className="w-6 h-6 rounded-full border border-white/20 object-cover" />}
@@ -379,7 +398,10 @@ function HangmanGameClient() {
                                             {p.result}
                                         </span>
                                     </span>
-                                    <span className="text-zinc-300 font-mono">{(p.timeTakenMs / 1000).toFixed(2)}s</span>
+                                    <div className="flex flex-col items-end">
+                                        <span className="text-emerald-400 font-bold text-sm">{p.score || 0} wins</span>
+                                        <span className="text-zinc-400 font-mono text-[10px]">{(p.timeTakenMs / 1000).toFixed(2)}s</span>
+                                    </div>
                                 </div>
                             ))}
                             {finishedPlayers.length < lobbyPlayersCount && (

@@ -115,7 +115,7 @@ const relationsRouter: RouterObject = {
     {
       method: "post",
       props: "/request/:id/",
-      authorization: "required",
+      authorization: "non-guest",
       rateLimit: "strict",
       keyType: "user",
       zodSchema: z.object({ params: idSchema }),
@@ -209,7 +209,7 @@ const relationsRouter: RouterObject = {
     {
       method: "delete",
       props: "/request/:id/",
-      authorization: "required",
+      authorization: "non-guest",
       rateLimit: "strict",
       keyType: "user",
       zodSchema: z.object({ params: idSchema }),
@@ -262,7 +262,7 @@ const relationsRouter: RouterObject = {
     {
       method: "patch",
       props: "/respond/:id/",
-      authorization: "required",
+      authorization: "non-guest",
       rateLimit: "strict",
       keyType: "user",
       zodSchema: z.object({ params: idSchema }),

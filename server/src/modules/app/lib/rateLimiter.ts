@@ -1,4 +1,4 @@
-import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+import rateLimit from "express-rate-limit";
 
 type keyType = "ip" | "user" | "default";
 
@@ -17,15 +17,16 @@ class RateLimiter {
     return rateLimit({
       // Deconstruct the parameters passed earlier, based on dynamic policy
       ...this.limits[policy],
+      validate: false,
 
       /* Set the parameter on which rate-limiting will work.
       Defaults to `req.ip` if user is not defined. Used in combination
       with authHandler to return early if auth is must for rate limiting.
       */
       keyGenerator: (req) => {
-        if (keyType === "user") return req.user!.id;
-        if (keyType === "ip") return ipKeyGenerator(req.ip!,56);
-        return req.user?.id ?? ipKeyGenerator(req.ip!,56);
+        if (keyType === "user" && !req.user?.is_anonymous) return req.user!.id;
+        if (keyType === "ip") return req.ip || 'unknown';
+        return req.user && !req.user.is_anonymous ? req.user.id : (req.ip || 'unknown');
       },
     });
   }

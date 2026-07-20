@@ -57,7 +57,7 @@ export default function Home() {
     setError('');
     
     try {
-      const fetchedWordlists = await WordlistAPI.getDefaultWordlists();
+      const fetchedWordlists = await WordlistAPI.getAllAvailableWordlists();
       if (!fetchedWordlists || fetchedWordlists.length === 0) {
         throw new Error("No wordlists available.");
       }
@@ -119,6 +119,34 @@ export default function Home() {
       setLoading(false);
       setError(err.message || "Failed to abandon previous game.");
     }
+  };
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+
+  const handleSearchWordlists = async () => {
+    if (!searchQuery.trim()) return;
+    setIsSearching(true);
+    setError('');
+    try {
+      const results = await WordlistAPI.searchPublicWordlists(searchQuery.trim());
+      setWordlists(results);
+      if (results.length > 0) setSelectedWordlist(results[0].id);
+      else setSelectedWordlist('');
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleResetWordlists = async () => {
+    setSearchQuery('');
+    try {
+      const fetchedWordlists = await WordlistAPI.getAllAvailableWordlists();
+      setWordlists(fetchedWordlists);
+      if (fetchedWordlists.length > 0) setSelectedWordlist(fetchedWordlists[0].id);
+    } catch (err) {}
   };
 
   return (
@@ -190,12 +218,20 @@ export default function Home() {
               )}
             </Card>
 
-            <button 
-              onClick={() => router.push('/logs')}
-              className="mt-6 mx-auto bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-6 py-3 rounded-full border border-white/10 transition-colors font-bold flex items-center gap-2"
-            >
-              <History className="w-5 h-5" /> Match History
-            </button>
+            <div className="flex justify-center gap-4 mt-6">
+              <button 
+                onClick={() => router.push('/logs')}
+                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-6 py-3 rounded-full border border-white/10 transition-colors font-bold flex items-center gap-2"
+              >
+                <History className="w-5 h-5" /> History
+              </button>
+              <button 
+                onClick={() => router.push('/wordlists')}
+                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-6 py-3 rounded-full border border-white/10 transition-colors font-bold flex items-center gap-2"
+              >
+                <Swords className="w-5 h-5" /> Wordlists
+              </button>
+            </div>
           </div>
         ) : (
           <div className="bg-[#251A3D] p-6 sm:p-8 rounded-3xl border-t border-white/10 w-full flex flex-col gap-5 shadow-2xl">
@@ -203,13 +239,40 @@ export default function Home() {
               {selectedGamemode === 1 ? 'SINGLEPLAYER SETUP' : 'MULTIPLAYER SETUP'}
             </h2>
             
-            <div className="flex flex-col gap-1">
-              <label className="text-zinc-400 text-xs font-bold uppercase tracking-widest pl-1">Select Wordlist</label>
+            <div className="flex flex-col gap-2">
+              <div className="flex justify-between items-center px-1">
+                <label className="text-zinc-400 text-xs font-bold uppercase tracking-widest">Select Wordlist</label>
+                {searchQuery || wordlists.length === 0 || !wordlists.some(w => w.default) ? (
+                  <button onClick={handleResetWordlists} className="text-[10px] text-violet-400 font-bold uppercase hover:text-violet-300 transition-colors">
+                    My Library
+                  </button>
+                ) : null}
+              </div>
+              
+              <div className="flex gap-2">
+                <input 
+                  type="text"
+                  placeholder="Search public wordlists..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSearchWordlists()}
+                  className="bg-[#171124] text-white border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-violet-500 transition-colors font-semibold shadow-inner flex-1 text-sm"
+                />
+                <button 
+                  onClick={handleSearchWordlists}
+                  disabled={isSearching}
+                  className="bg-violet-600 hover:bg-violet-500 text-white px-4 rounded-xl font-bold transition-colors text-sm uppercase tracking-widest"
+                >
+                  {isSearching ? '...' : 'Search'}
+                </button>
+              </div>
+
               <select 
-                className="bg-[#171124] text-white border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-violet-500 transition-colors font-semibold shadow-inner"
+                className="bg-[#171124] text-white border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-violet-500 transition-colors font-semibold shadow-inner mt-1"
                 value={selectedWordlist}
                 onChange={(e) => setSelectedWordlist(e.target.value)}
               >
+                {wordlists.length === 0 && <option value="" disabled>No results found</option>}
                 {wordlists.map(w => (
                   <option key={w.id} value={w.id}>{w.name} {w.default ? '(Default)' : ''}</option>
                 ))}

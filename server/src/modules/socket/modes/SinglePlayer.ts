@@ -87,7 +87,7 @@ export class Classic extends GameMode {
         this.winner = null;
         this.players = {};
         this.completedPlayersCount = 0;
-        this.startedAt = Date.now();
+        // this.startedAt = Date.now(); // will be set by GameMode when round actually starts
         // totalPlayersCount is game-level — NOT reset here
     }
 }

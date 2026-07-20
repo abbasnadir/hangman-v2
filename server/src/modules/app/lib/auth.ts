@@ -20,7 +20,7 @@ export function authHandler(authType: authorization): RequestHandler {
 
     try {
       // Required Auth, stop the route strictly if unauthenticated by throwing errors
-      if (authType === "required") {
+      if (authType === "required" || authType === "non-guest") {
         if (!authHeader?.startsWith("Bearer ")) {
           throw new UnauthorizedError("Authentication required");
         }
@@ -28,6 +28,10 @@ export function authHandler(authType: authorization): RequestHandler {
           req.user = await verifyJwt(authHeader.slice(7));
         } catch (err) {
           throw new UnauthorizedError("Invalid or expired token");
+        }
+
+        if (authType === "non-guest" && req.user.is_anonymous) {
+          throw new UnauthorizedError("Guest accounts are not permitted to perform this action.");
         }
 
         // Check if user exists and is not deleted in the database for required auth routes

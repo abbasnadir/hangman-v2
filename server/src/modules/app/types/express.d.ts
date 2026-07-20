@@ -4,6 +4,7 @@ declare namespace Express {
       id: string;
       email: string | undefined;
       role: string | undefined;
+      is_anonymous?: boolean;
     };
   }
 }

@@ -63,7 +63,7 @@ export async function getRoundPlayer(roundId: string, userId: string) {
 export async function markPlayerAsActive(roundPlayerId: string) {
   const { error } = await supabase
     .from("game_round_players")
-    .update({ left_at: null, result: null })
+    .update({ left_at: null })
     .eq("id", roundPlayerId);
 
   if (error) throw new Error(error.message);

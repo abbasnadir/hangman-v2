@@ -63,7 +63,7 @@ const profileRouter: RouterObject = {
       /* Update the info of current user */
       method: "patch",
       props: "/",
-      authorization: "required",
+      authorization: "non-guest",
       rateLimit: "strict",
       keyType: "user",
       zodSchema: z.object({
@@ -170,7 +170,7 @@ const profileRouter: RouterObject = {
       /* Delete the current user */
       method: "delete",
       props: "/",
-      authorization: "required",
+      authorization: "non-guest",
       rateLimit: "strict",
       keyType: "user",
       handler: async (req: Request, res: Response) => {

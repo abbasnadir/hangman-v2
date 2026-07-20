@@ -30,6 +30,11 @@ export const useGameSocket = (gameId: string | null) => {
         socketService.emit('game:start', {});
     }, []);
 
+    const startNextRound = useCallback(() => {
+        console.log('[useGameSocket] Emitting game:start_next_round');
+        socketService.emit('game:start_next_round', {});
+    }, []);
+
     const submitMove = useCallback((move: Move) => {
         socketService.emit('game:submit_move', move);
     }, []);
@@ -77,6 +82,7 @@ export const useGameSocket = (gameId: string | null) => {
     return {
         connectToGame,
         startGame,
+        startNextRound,
         submitMove,
         leaveGame,
         useListener,

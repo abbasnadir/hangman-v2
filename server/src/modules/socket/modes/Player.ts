@@ -5,12 +5,22 @@ export class Player {
     public finalTime: number = 0;
     public isConnected: boolean = true;
 
+    public startedAt: number = 0;
+
     constructor(
         public id: string,
         public lives: number
     ) {}
 
-    recordGuess(guess: string, isCorrect: boolean, globalStartedAt: number) {
+    startRound(startedAt: number) {
+        this.startedAt = startedAt;
+        this.completed = false;
+        this.finalTime = 0;
+        this.move_set = [];
+        this.move_index = 0;
+    }
+
+    recordGuess(guess: string, isCorrect: boolean, fallbackStartedAt: number) {
         if (this.completed) return;
         
         this.move_set.push(guess);
@@ -19,24 +29,26 @@ export class Player {
         if (!isCorrect) {
             this.lives -= 1;
             if (this.lives <= 0) {
-                this.finish(globalStartedAt);
+                this.finish(fallbackStartedAt);
             }
         }
     }
 
-    finish(globalStartedAt: number) {
+    finish(fallbackStartedAt: number) {
         if (this.completed) return;
         this.completed = true;
-        this.finalTime = Date.now() - globalStartedAt;
+        const start = this.startedAt || fallbackStartedAt;
+        this.finalTime = Date.now() - start;
     }
 
-    disconnect(globalStartedAt: number) {
+    disconnect(fallbackStartedAt: number) {
         this.isConnected = false;
-        this.finish(globalStartedAt);
+        this.finish(fallbackStartedAt);
     }
 
-    getTimeTaken(globalStartedAt: number): number {
+    getTimeTaken(fallbackStartedAt: number): number {
         if (this.completed) return this.finalTime;
-        return Date.now() - globalStartedAt;
+        const start = this.startedAt || fallbackStartedAt;
+        return Date.now() - start;
     }
 }

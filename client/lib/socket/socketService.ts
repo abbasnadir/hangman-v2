@@ -17,12 +17,19 @@ class SocketService {
       console.log('[SocketService] Starting new connection...');
       this.connectionPromise = new Promise(async (resolve, reject) => {
         try {
-          const { data: { session } } = await supabase.auth.getSession();
-          const token = session?.access_token || '';
+          let { data: { session } } = await supabase.auth.getSession();
           
-          if (!token) {
-            console.warn('[SocketService] No auth token found during connect!');
+          if (!session?.access_token) {
+            console.log('[SocketService] No auth session found, creating guest account...');
+            const { data, error } = await supabase.auth.signInAnonymously();
+            if (error) {
+              console.error('[SocketService] Failed to create guest account:', error);
+            } else {
+              session = data.session;
+            }
           }
+          
+          const token = session?.access_token || '';
 
           console.log(`[SocketService] Connecting to ${SOCKET_URL} ...`);
           this.socket = io(SOCKET_URL, {
