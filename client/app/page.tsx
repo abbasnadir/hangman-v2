@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useEffect, useState } from "react";
 import { useRouter } from 'next/navigation';
 import Card from "@/components/Card";
-import { Gamepad2, Swords, History, LogIn, X, Play } from "lucide-react";
+import { Gamepad2, Swords, History, LogIn, X, Play, LogOut } from "lucide-react";
 import { GameAPI } from "@/lib/api/game";
 import { WordlistAPI, Wordlist } from "@/lib/api/wordlists";
 
@@ -230,6 +230,12 @@ export default function Home() {
                 className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-6 py-3 rounded-full border border-white/10 transition-colors font-bold flex items-center gap-2"
               >
                 <Swords className="w-5 h-5" /> Wordlists
+              </button>
+              <button 
+                onClick={async () => { await supabase.auth.signOut(); }}
+                className="bg-rose-900/40 hover:bg-rose-800/60 text-rose-300 px-6 py-3 rounded-full border border-rose-500/20 transition-colors font-bold flex items-center gap-2"
+              >
+                <LogOut className="w-5 h-5" /> Logout
               </button>
             </div>
           </div>
