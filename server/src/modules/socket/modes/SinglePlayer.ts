@@ -25,7 +25,7 @@ export class Classic extends GameMode {
             return {
                 player,
                 processedMove: null,
-                playerResult: this.winner === userId ? "won" : this.winner ? "completed" : "lost",
+                playerResult: "in_progress", // Prevent duplicate orchestration
                 roundEnded: this.completedPlayersCount >= this.totalPlayersCount,
                 hasNextRound: this.roundIndex < this.numberOfWords
             };

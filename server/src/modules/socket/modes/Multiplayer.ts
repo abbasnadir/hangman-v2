@@ -4,6 +4,7 @@ import { Player } from "./Player.js";
 
 export class Multiplayer extends GameMode {
     winner: string | null = null;
+    minTime: number = Infinity;
     scores: Record<string, number> = {};
 
     constructor(lives: number = 5) {
@@ -24,21 +25,10 @@ export class Multiplayer extends GameMode {
         const isRoundEnded = this.completedPlayersCount >= this.totalPlayersCount;
 
         if (player.completed) {
-            let overallResult: "won" | "lost" | "completed" | "in_progress" = "in_progress";
-            overallResult = this.winner === userId ? "won" : "lost";
-            if (this.roundIndex === this.numberOfWords) {
-                if (!isRoundEnded) {
-                    overallResult = "completed"; // Wait for final game result
-                } else {
-                    const maxScore = Math.max(...Object.values(this.scores));
-                    const winners = Object.keys(this.scores).filter(id => this.scores[id] === maxScore);
-                    overallResult = winners.includes(userId) ? "won" : "lost";
-                }
-            }
             return {
                 player,
                 processedMove: null,
-                playerResult: overallResult,
+                playerResult: "in_progress", // Prevent duplicate orchestration
                 roundEnded: isRoundEnded,
                 hasNextRound: this.roundIndex < this.numberOfWords
             };
@@ -72,11 +62,11 @@ export class Multiplayer extends GameMode {
                 player.finish(this.startedAt);
                 this.completedPlayersCount++;
                 isCorrectCompletion = true;
-                // First player to correctly guess the whole word wins the round
-                if (!this.winner) { 
-                    this.winner = userId; 
-                    justWon = true; 
-                    this.scores[userId] = (this.scores[userId] || 0) + 1;
+                
+                const timeTaken = player.getTimeTaken(this.startedAt);
+                if (timeTaken < this.minTime) {
+                    this.minTime = timeTaken;
+                    this.winner = userId;
                 }
             }
         } else if (player.lives === 0) {
@@ -86,15 +76,26 @@ export class Multiplayer extends GameMode {
 
         let playerResult: ProcessMoveResult["playerResult"] = "in_progress";
         if (player.completed) {
-            if (justWon) playerResult = "won";
-            else if (isCorrectCompletion) playerResult = "completed";
-            else playerResult = "lost";
+            if (this.completedPlayersCount >= this.totalPlayersCount) {
+                if (this.winner && !(this as any).roundScoreAwarded) {
+                    this.scores[this.winner] = (this.scores[this.winner] || 0) + 1;
+                    (this as any).roundScoreAwarded = true;
+                }
+                
+                if (userId === this.winner) playerResult = "won";
+                else if (player.lives === 0) playerResult = "lost";
+                else playerResult = "completed";
+            } else {
+                if (player.lives === 0) playerResult = "lost";
+                else playerResult = "completed";
+            }
             
             // If this is the final round, adjust results
             if (this.roundIndex === this.numberOfWords) {
                 if (this.completedPlayersCount < this.totalPlayersCount) {
                     // Wait for others to finish before showing final win/loss
-                    playerResult = "completed";
+                    if (player.lives === 0) playerResult = "lost";
+                    else playerResult = "completed";
                 } else {
                     const maxScore = Math.max(0, ...Object.values(this.scores));
                     const winners = Object.keys(this.scores).filter(id => this.scores[id] === maxScore && maxScore > 0);
@@ -121,9 +122,20 @@ export class Multiplayer extends GameMode {
     resetRound(word: string): void {
         this.word = word;
         this.winner = null;
+        this.minTime = Infinity;
         this.players = {};
         this.completedPlayersCount = 0;
+        (this as any).roundScoreAwarded = false;
         // Do NOT set startedAt here; it will be set when the round actually starts.
         // totalPlayersCount is game-level — NOT reset here
+    }
+
+    getFinalResult(userId: string): string {
+        const maxScore = Math.max(0, ...Object.values(this.scores));
+        const winners = Object.keys(this.scores).filter(id => this.scores[id] === maxScore && maxScore > 0);
+        if (winners.includes(userId)) return "won";
+        const p = this.players[userId];
+        if (p && p.completed && p.lives > 0) return "completed";
+        return "lost";
     }
 }

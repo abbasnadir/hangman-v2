@@ -42,6 +42,8 @@ export interface PlayerFinishedResult {
     };
     /** Payload for the game:player_finished_broadcast event sent to all *other* players. */
     broadcastPayload: Record<string, unknown>;
+    /** If an early player was declared the winner at the end of the round, this payload updates everyone's UI. */
+    winnerBroadcastPayload?: Record<string, unknown>;
     /** True when every player in this round has now finished. */
     roundEnded: boolean;
     /**
@@ -124,7 +126,8 @@ export abstract class GameMode {
         this.wordlistId = config.wordlistId;
         this.roundIndex = config.roundIndex;
         this.totalPlayersCount = config.totalPlayers;
-        this.resetRound(config.word); // sets word, players, counts, startedAt
+        this.startedAt = Date.now();
+        this.resetRound(config.word); // sets word, players, counts
 
         const startedAt = new Date(this.startedAt).toISOString();
         await Promise.all([
@@ -238,7 +241,10 @@ export abstract class GameMode {
         const hasNextRound = this.roundIndex < this.numberOfWords;
 
         // Fetch display profile (non-blocking; errors fall back to defaults)
-        const profile = await db.getProfile(userId).catch(() => null);
+        let profile = null;
+        if (!cachedUsername) {
+            profile = await db.getProfile(userId).catch(() => null);
+        }
         const username = cachedUsername || profile?.username || "Player";
         const pfp = cachedPfp || profile?.pfp || "";
 
@@ -258,12 +264,30 @@ export abstract class GameMode {
             ? { name: "game:player_won", payload: { userId, timeTakenMs, word: previousWord, username, pfp, score: currentScore } }
             : playerResult === "completed"
             ? { name: "game:player_completed", payload: { userId, timeTakenMs, username, pfp, score: currentScore } }
-            : { name: "game:player_lost", payload: { userId, word: previousWord, username, pfp, score: currentScore } };
+            : { name: "game:player_lost", payload: { userId, timeTakenMs, word: previousWord, username, pfp, score: currentScore } };
 
         // ── Build the broadcast that goes to all OTHER players ──────────────
         const broadcastPayload = { userId, result: playerResult, timeTakenMs, lives: player.lives, username, pfp, score: currentScore };
 
         const roundEnded = this.completedPlayersCount >= this.totalPlayersCount;
+        let winnerBroadcastPayload: Record<string, unknown> | undefined = undefined;
+
+        if (roundEnded && 'winner' in this && typeof (this as any).winner === 'string' && (this as any).winner !== userId) {
+            const winnerId = (this as any).winner;
+            const wPlayer = this.players[winnerId];
+            if (wPlayer) {
+                const wProfile = await db.getProfile(winnerId).catch(() => null);
+                winnerBroadcastPayload = {
+                    userId: winnerId,
+                    result: "won",
+                    timeTakenMs: wPlayer.getTimeTaken(this.startedAt),
+                    lives: wPlayer.lives,
+                    username: wProfile?.username || "Player",
+                    pfp: wProfile?.pfp || "",
+                    score: 'scores' in this ? (this as any).scores[winnerId] || 0 : 0
+                };
+            }
+        }
 
         if (!roundEnded) {
             Promise.all(dbPromises).catch(console.error); // fire and forget
@@ -278,7 +302,7 @@ export abstract class GameMode {
             dbPromises.push(db.finishGame(gameId).catch(console.error));
             dbPromises.push(db.updateGamePlayerResult(gameId, userId, playerResult).catch(console.error));
             Promise.all(dbPromises).catch(console.error); // fire and forget
-            return { playerEvent, broadcastPayload, roundEnded: true, gameFullyEnded: true };
+            return { playerEvent, broadcastPayload, winnerBroadcastPayload, roundEnded: true, gameFullyEnded: true };
         }
 
         // ── Transition to next round ────────────────────────────────────────
@@ -331,6 +355,7 @@ export abstract class GameMode {
 
             const playerMap = Object.fromEntries(insertedPlayers.map(p => [p.user_id, p.id]));
 
+            this.startedAt = Date.now();
             this.resetRound(newWord);
 
             await Promise.all(dbPromises);
@@ -346,6 +371,7 @@ export abstract class GameMode {
         return {
             playerEvent,
             broadcastPayload,
+            winnerBroadcastPayload,
             roundEnded: true,
             nextRoundPromise: setupNextRound(),
             gameFullyEnded: false

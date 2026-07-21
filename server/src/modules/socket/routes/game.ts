@@ -395,6 +395,11 @@ export const gameRoute: SocketRouteObject = {
                 socket.emit(finishResult.playerEvent.name, finishResult.playerEvent.payload);
                 socket.to(currentGameId).emit("game:player_finished_broadcast", finishResult.broadcastPayload);
 
+                if (finishResult.winnerBroadcastPayload) {
+                    socket.emit("game:player_finished_broadcast", finishResult.winnerBroadcastPayload);
+                    socket.to(currentGameId).emit("game:player_finished_broadcast", finishResult.winnerBroadcastPayload);
+                }
+
                 if (finishResult.roundEnded) {
                   if (finishResult.nextRoundPromise) {
                     const nextRound = await finishResult.nextRoundPromise;
@@ -414,12 +419,10 @@ export const gameRoute: SocketRouteObject = {
                     }
                   } else {
                     const scores = 'scores' in gameMode ? (gameMode as any).scores : {};
-                    const maxScore = Math.max(0, ...Object.values(scores) as number[]);
-                    const winners = Object.keys(scores).filter(id => (scores as Record<string, number>)[id] === maxScore);
                     const allSockets = [...await socket.in(currentGameId).fetchSockets(), socket];
                     for (const s of allSockets) {
                       const uid = s.data?.user?.id;
-                      const result = winners.includes(uid) ? "won" : "lost";
+                      const result = uid && typeof (gameMode as any).getFinalResult === 'function' ? (gameMode as any).getFinalResult(uid) : undefined;
                       s.emit("game:fully_completed", { success: true, finalScores: scores, result });
                     }
                     delete activeGameInstances[currentGameId];

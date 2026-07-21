@@ -180,7 +180,7 @@ function HangmanGameClient() {
         setWord(data.word);
         if (modeId === 2) {
             setShowMultiplayerLeaderboard(true);
-            setFinishedPlayers(prev => [...prev, { userId: data.userId || 'You', username: data.username || 'You', pfp: data.pfp, result: 'lost', timeTakenMs: 0, lives: 0, score: data.score }]);
+            setFinishedPlayers(prev => [...prev, { userId: data.userId || 'You', username: data.username || 'You', pfp: data.pfp, result: 'lost', timeTakenMs: data.timeTakenMs || 0, lives: 0, score: data.score }]);
         }
     });
 
@@ -209,7 +209,9 @@ function HangmanGameClient() {
 
     useListener('game:player_finished_broadcast', (data) => {
         setFinishedPlayers(prev => {
-            if (prev.some(p => p.userId === data.userId)) return prev;
+            if (prev.some(p => p.userId === data.userId)) {
+                return prev.map(p => p.userId === data.userId ? data : p);
+            }
             return [...prev, data];
         });
     });
