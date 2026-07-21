@@ -43,7 +43,7 @@ export interface PlayerFinishedResult {
     /** Payload for the game:player_finished_broadcast event sent to all *other* players. */
     broadcastPayload: Record<string, unknown>;
     /** If an early player was declared the winner at the end of the round, this payload updates everyone's UI. */
-    winnerBroadcastPayload?: Record<string, unknown>;
+    winnerBroadcastPayload?: Record<string, unknown> | undefined;
     /** True when every player in this round has now finished. */
     roundEnded: boolean;
     /**
