@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useEffect, useState } from "react";
 import { useRouter } from 'next/navigation';
 import Card from "@/components/Card";
-import { Gamepad2, Swords, History, LogIn, X, Play, LogOut } from "lucide-react";
+import { Gamepad2, Swords, History, LogIn, X, Play, LogOut, RefreshCw } from "lucide-react";
 import { GameAPI } from "@/lib/api/game";
 import { WordlistAPI, Wordlist } from "@/lib/api/wordlists";
 
@@ -44,6 +44,39 @@ export default function Home() {
     });
   };
 
+  const [loadingWordlists, setLoadingWordlists] = useState(false);
+
+  const loadWordlists = async (forceRefresh = false) => {
+    if (!forceRefresh && wordlists.length > 0) return true; // Already loaded
+    
+    setLoadingWordlists(true);
+    setError('');
+    try {
+      const fetchedWordlists = await WordlistAPI.getAllAvailableWordlists(forceRefresh);
+      if (!fetchedWordlists || fetchedWordlists.length === 0) {
+        throw new Error("No wordlists available.");
+      }
+      setWordlists(fetchedWordlists);
+      if (fetchedWordlists.length > 0 && (!selectedWordlist || forceRefresh)) {
+        setSelectedWordlist(fetchedWordlists[0].id);
+      }
+      return true;
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Failed to load wordlists");
+      return false;
+    } finally {
+      setLoadingWordlists(false);
+    }
+  };
+
+  useEffect(() => {
+    if (session) {
+      // Prefetch wordlists in background when authenticated
+      loadWordlists();
+    }
+  }, [session]);
+
   const [loadingMode, setLoadingMode] = useState<number | null>(null);
 
   const handleOpenGameMenu = async (mode: number) => {
@@ -57,16 +90,11 @@ export default function Home() {
     setError('');
     
     try {
-      const fetchedWordlists = await WordlistAPI.getAllAvailableWordlists();
-      if (!fetchedWordlists || fetchedWordlists.length === 0) {
-        throw new Error("No wordlists available.");
+      // It will just return true immediately if already prefetched
+      const success = await loadWordlists();
+      if (success) {
+        setShowGameMenu(true);
       }
-      setWordlists(fetchedWordlists);
-      setSelectedWordlist(fetchedWordlists[0].id);
-      setShowGameMenu(true);
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || "Failed to load wordlists");
     } finally {
       setLoadingMode(null);
     }
@@ -247,7 +275,12 @@ export default function Home() {
             
             <div className="flex flex-col gap-2">
               <div className="flex justify-between items-center px-1">
-                <label className="text-zinc-400 text-xs font-bold uppercase tracking-widest">Select Wordlist</label>
+                <div className="flex items-center gap-2">
+                  <label className="text-zinc-400 text-xs font-bold uppercase tracking-widest">Select Wordlist</label>
+                  <button onClick={() => loadWordlists(true)} disabled={loadingWordlists} className={`text-zinc-400 hover:text-violet-400 transition-colors ${loadingWordlists ? 'animate-spin' : ''}`} title="Refresh Wordlists">
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                </div>
                 {searchQuery || wordlists.length === 0 || !wordlists.some(w => w.default) ? (
                   <button onClick={handleResetWordlists} className="text-[10px] text-violet-400 font-bold uppercase hover:text-violet-300 transition-colors">
                     My Library

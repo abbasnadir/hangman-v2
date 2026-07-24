@@ -89,10 +89,13 @@ const logsRouter: RouterObject = {
             const usedLives = movesData.filter((m: any) => m.round_id === round.id).length;
             
             let timeTakenMs = 0;
-            if (round.started_at && round.finished_at) {
+            if (roundPlayerInfo.left_at) {
+              const start = roundPlayerInfo.joined_at || round.started_at;
+              if (start) {
+                timeTakenMs = new Date(roundPlayerInfo.left_at).getTime() - new Date(start).getTime();
+              }
+            } else if (round.started_at && round.finished_at) {
               timeTakenMs = new Date(round.finished_at).getTime() - new Date(round.started_at).getTime();
-            } else if (roundPlayerInfo.joined_at && roundPlayerInfo.left_at) {
-              timeTakenMs = new Date(roundPlayerInfo.left_at).getTime() - new Date(roundPlayerInfo.joined_at).getTime();
             }
 
             return {

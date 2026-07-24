@@ -1,7 +1,7 @@
 'use client';
 
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, useCallback, Suspense, useRef } from 'react';
 import { GameStatus } from '@/components/GameStatus';
 import { WordDisplay } from '@/components/WordDisplay';
 import { GameHeader } from '@/components/GameControls';
@@ -20,11 +20,13 @@ function HangmanGameClient() {
     const [word, setWord] = useState(''); // The answer word (revealed at end)
     const [wordLength, setWordLength] = useState(0);
     const [lives, setLives] = useState(TOTAL_LIVES);
+    const [totalLivesState, setTotalLivesState] = useState(TOTAL_LIVES);
     const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
     const [displayTime, setDisplayTime] = useState("0.00s");
     const [showMultiplayerLeaderboard, setShowMultiplayerLeaderboard] = useState<boolean>(false);
     const [finishedPlayers, setFinishedPlayers] = useState<any[]>([]);
     const [isFullyCompleted, setIsFullyCompleted] = useState<boolean>(false);
+    const [disconnectedPlayers, setDisconnectedPlayers] = useState<Set<string>>(new Set());
     
     // In an online game, we don't know the full word until the end or we maintain a server-side verified word array.
     // For this frontend, we'll keep an array of correctly guessed letters. 
@@ -56,6 +58,10 @@ function HangmanGameClient() {
     const [modeId, setModeId] = useState<number | null>(null);
     const [isHost, setIsHost] = useState<boolean>(false);
     const [lobbyPlayersCount, setLobbyPlayersCount] = useState<number>(1);
+    const [lobbyPlayers, setLobbyPlayers] = useState<Array<{userId: string; username: string}>>([]);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [disconnectNotification, setDisconnectNotification] = useState<string | null>(null);
+    const myUserIdRef = useRef<string | null>(null);
 
     const {
         connectToGame,
@@ -63,7 +69,10 @@ function HangmanGameClient() {
         startNextRound,
         submitMove,
         leaveGame,
-        useListener
+        forfeitGame,
+        useListener,
+        isConnected,
+        socketService
     } = useGameSocket(gameId);
 
     useEffect(() => {
@@ -77,9 +86,13 @@ function HangmanGameClient() {
 
     useListener('game:join', (data) => {
         if (data.success) {
+            if (data.userId) {
+                myUserIdRef.current = data.userId;
+            }
             if (data.reconnected && data.started) {
                 setStatus('playing');
                 setLives(data.lives ?? TOTAL_LIVES);
+                if (data.totalLives) setTotalLivesState(data.totalLives);
                 setPressedKeys(new Set(data.move_set?.map((m: string) => m.toUpperCase()) || []));
                 if (data.maskedWord) setMaskedWord(data.maskedWord);
                 if (data.startTime) setGameStartTime(data.startTime);
@@ -95,13 +108,25 @@ function HangmanGameClient() {
                 setLobbyPlayersCount(data.playersCount);
             }
 
+            // Add ourselves to the lobby player list, and existing players if they were sent
+            const existing = Array.isArray(data.existingPlayers) ? data.existingPlayers : [];
+            const myIndex = existing.findIndex((p: any) => p.userId === data.userId);
+            if (myIndex !== -1) {
+                // If the backend already sent us in existing, just map it out to identify 'self'
+                setLobbyPlayers(existing.map((p: any) => p.userId === data.userId ? { ...p, userId: 'self' } : p));
+            } else {
+                setLobbyPlayers([{ userId: 'self', username: data.username || 'You' }, ...existing]);
+            }
             // Auto-start only for single player if not reconnected/started
             if (parsedModeId === 1 && !data.started) {
                 startGame();
             }
         } else {
+            setErrorMessage(data.error);
             console.error('Failed to join game:', data.error);
-            router.push('/');
+            setTimeout(() => {
+                router.push('/');
+            }, 3000);
         }
     });
 
@@ -111,12 +136,25 @@ function HangmanGameClient() {
         } else {
             setLobbyPlayersCount(prev => prev + 1);
         }
+        
+        if (data.existingPlayers && Array.isArray(data.existingPlayers)) {
+            setLobbyPlayers(data.existingPlayers.map((p: any) => 
+                p.userId === myUserIdRef.current ? { ...p, userId: 'self' } : p
+            ));
+        } else if (data.userId && data.username) {
+            // Fallback for older events without existingPlayers
+            setLobbyPlayers(prev => {
+                if (prev.find(p => p.userId === data.userId)) return prev;
+                return [...prev, { userId: data.userId, username: data.username }];
+            });
+        }
     });
 
     useListener('game:start', (data) => {
         if (data.success) {
             setStatus('playing');
-            setLives(TOTAL_LIVES);
+            setLives(data.lives ?? TOTAL_LIVES);
+            if (data.lives) setTotalLivesState(data.lives); // start payload has lives = max lives
             setPressedKeys(new Set());
             if (data.maskedWord) {
                 setMaskedWord(data.maskedWord);
@@ -126,11 +164,13 @@ function HangmanGameClient() {
             }
         } else {
             if (data.error === "This game has already been started.") {
-                // Reconnection recovery: we tried to start it but it was already running.
-                setStatus('playing');
-                setLives(TOTAL_LIVES);
+                // Reconnection recovery: the game is already running.
+                // Re-join to get the current game state (maskedWord, lives, etc.)
+                socketService.emit('game:join', { gameId });
             } else {
+                setErrorMessage(data.error);
                 console.error('Failed to start game:', data.error);
+                setTimeout(() => setErrorMessage(null), 5000);
             }
         }
     });
@@ -138,7 +178,8 @@ function HangmanGameClient() {
     useListener('game:started', (data) => {
         if (data.success) {
             setStatus('playing');
-            setLives(TOTAL_LIVES);
+            setLives(data.lives ?? TOTAL_LIVES);
+            if (data.lives) setTotalLivesState(data.lives);
             setPressedKeys(new Set());
             if (data.maskedWord) {
                 setMaskedWord(data.maskedWord);
@@ -170,7 +211,11 @@ function HangmanGameClient() {
         setDisplayTime((data.timeTakenMs / 1000).toFixed(2) + 's');
         if (modeId === 2) {
             setShowMultiplayerLeaderboard(true);
-            setFinishedPlayers(prev => [...prev, { userId: data.userId || 'You', username: data.username || 'You', pfp: data.pfp, result: 'won', timeTakenMs: data.timeTakenMs, lives, score: data.score }]);
+            setFinishedPlayers(prev => {
+                const newPlayer = { userId: data.userId || 'You', username: data.username || 'You', pfp: data.pfp, result: 'won', timeTakenMs: data.timeTakenMs, lives, score: data.score };
+                if (prev.some(p => p.userId === newPlayer.userId)) return prev.map(p => p.userId === newPlayer.userId ? newPlayer : p);
+                return [...prev, newPlayer];
+            });
         }
     });
 
@@ -180,17 +225,36 @@ function HangmanGameClient() {
         setWord(data.word);
         if (modeId === 2) {
             setShowMultiplayerLeaderboard(true);
-            setFinishedPlayers(prev => [...prev, { userId: data.userId || 'You', username: data.username || 'You', pfp: data.pfp, result: 'lost', timeTakenMs: data.timeTakenMs || 0, lives: 0, score: data.score }]);
+            setFinishedPlayers(prev => {
+                const newPlayer = { userId: data.userId || 'You', username: data.username || 'You', pfp: data.pfp, result: 'lost', timeTakenMs: data.timeTakenMs || 0, lives: 0, score: data.score };
+                if (prev.some(p => p.userId === newPlayer.userId)) return prev.map(p => p.userId === newPlayer.userId ? newPlayer : p);
+                return [...prev, newPlayer];
+            });
+        }
+    });
+
+    useListener('game:leave', (data) => {
+        if (data.success) {
+            setStatus('ended');
+            setGameResult('abandoned');
+            if (data.word) {
+                setWord(data.word);
+            }
         }
     });
 
     useListener('game:player_completed', (data) => {
         setStatus('ended');
         setGameResult('completed');
+        if (data.word) setWord(data.word);
         setDisplayTime((data.timeTakenMs / 1000).toFixed(2) + 's');
         if (modeId === 2) {
             setShowMultiplayerLeaderboard(true);
-            setFinishedPlayers(prev => [...prev, { userId: data.userId || 'You', username: data.username || 'You', pfp: data.pfp, result: 'completed', timeTakenMs: data.timeTakenMs, lives, score: data.score }]);
+            setFinishedPlayers(prev => {
+                const newPlayer = { userId: data.userId || 'You', username: data.username || 'You', pfp: data.pfp, result: 'completed', timeTakenMs: data.timeTakenMs, lives, score: data.score };
+                if (prev.some(p => p.userId === newPlayer.userId)) return prev.map(p => p.userId === newPlayer.userId ? newPlayer : p);
+                return [...prev, newPlayer];
+            });
         }
     });
 
@@ -203,7 +267,11 @@ function HangmanGameClient() {
         setDisplayTime((data.timeTakenMs / 1000).toFixed(2) + 's');
         if (modeId === 2) {
             setShowMultiplayerLeaderboard(true);
-            setFinishedPlayers(prev => [...prev, { userId: data.userId || 'You', username: data.username || 'You', pfp: data.pfp, result: data.roundResult, timeTakenMs: data.timeTakenMs, lives, score: data.score }]);
+            setFinishedPlayers(prev => {
+                const newPlayer = { userId: data.userId || 'You', username: data.username || 'You', pfp: data.pfp, result: data.roundResult, timeTakenMs: data.timeTakenMs, lives, score: data.score };
+                if (prev.some(p => p.userId === newPlayer.userId)) return prev.map(p => p.userId === newPlayer.userId ? newPlayer : p);
+                return [...prev, newPlayer];
+            });
         }
     });
 
@@ -227,18 +295,55 @@ function HangmanGameClient() {
             setGameResult(data.result);
             setStatus('ended');
         }
+        if (data && data.leaderboard) {
+            setShowMultiplayerLeaderboard(true);
+            setFinishedPlayers(data.leaderboard.map((p: any) => ({
+                userId: p.userId,
+                username: p.username,
+                pfp: p.pfp,
+                score: p.score,
+                timeTakenMs: p.totalTimeMs,
+                lives: 0,
+                result: 'completed'
+            })));
+        }
+    });
+
+    useListener('game:player_disconnected', (data) => {
+        console.log(`[Game] Player ${data.userId} disconnected (reason: ${data.reason})`);
+        const name = data.username || 'A player';
+        setDisconnectNotification(`${name} disconnected`);
+        setTimeout(() => setDisconnectNotification(null), 5000);
+        setDisconnectedPlayers(prev => new Set(prev).add(data.userId));
+        setLobbyPlayers(prev => prev.filter(p => p.userId !== data.userId));
+    });
+
+    useListener('game:player_left', (data) => {
+        console.log(`[Game] Player ${data.userId} left the game`);
+        const name = data.username || 'A player';
+        setDisconnectNotification(`${name} left the game`);
+        setTimeout(() => setDisconnectNotification(null), 5000);
+        setDisconnectedPlayers(prev => new Set(prev).add(data.userId));
+        setLobbyPlayers(prev => prev.filter(p => p.userId !== data.userId));
+        if (data.playersCount !== undefined) {
+            setLobbyPlayersCount(data.playersCount);
+        }
     });
 
     const handleNextRound = () => {
         if (!nextRoundData || !nextRoundData.startTime) return;
+        // Set gameStartTime BEFORE status to avoid timer using stale value
+        setGameStartTime(nextRoundData.startTime);
         setStatus('playing');
         setGameResult(null);
         setWord('');
         setMaskedWord(nextRoundData.maskedWord || []);
-        setLives(TOTAL_LIVES);
+        setLives(nextRoundData.lives ?? TOTAL_LIVES);
         setPressedKeys(new Set());
         setFinishedPlayers([]);
         setDisplayTime("0.00s");
+        setDisconnectedPlayers(new Set());
+        setDisconnectNotification(null);
         setNextRoundData(null);
         startNextRound();
     };
@@ -255,9 +360,8 @@ function HangmanGameClient() {
         const upperKey = key.toUpperCase();
         if (pressedKeys.has(upperKey)) return;
 
-        // Optimistically add to pressed keys to prevent double-clicks
-        setPressedKeys(prev => new Set(prev).add(upperKey));
-
+        // Don't optimistically update pressedKeys — wait for server confirmation.
+        // This prevents desync when the server rejects the move.
         submitMove({
             guess: upperKey.toLowerCase(),
             timestamp: new Date()
@@ -277,9 +381,7 @@ function HangmanGameClient() {
     }, [handleKeyPress]);
 
     const giveUp = () => {
-        leaveGame();
-        setStatus('ended');
-        setGameResult('abandoned');
+        forfeitGame();
     };
 
     if (status === 'connecting' || (status === 'waiting' && modeId !== 2)) {
@@ -296,9 +398,23 @@ function HangmanGameClient() {
                 <div className="bg-[#251A3D] p-10 rounded-3xl border-t border-rose-500/30 text-center shadow-2xl flex flex-col gap-8 w-full max-w-md">
                     <h2 className="text-4xl font-black font-fredoka tracking-wider bg-clip-text text-transparent bg-gradient-to-br from-violet-400 to-emerald-400">MULTIPLAYER LOBBY</h2>
                     
+                    {errorMessage && (
+                        <div className="bg-rose-500/10 border border-rose-500/30 text-rose-400 p-4 rounded-xl text-sm font-bold shadow-lg animate-in fade-in zoom-in">
+                            {errorMessage}
+                        </div>
+                    )}
+
                     <div className="bg-zinc-900/50 rounded-2xl p-6 border border-white/5">
-                        <p className="text-zinc-400 font-bold tracking-widest uppercase text-sm mb-2">Players Joined</p>
-                        <p className="text-5xl font-black text-white">{lobbyPlayersCount}</p>
+                        <p className="text-zinc-400 font-bold tracking-widest uppercase text-sm mb-3">Players Joined ({lobbyPlayersCount})</p>
+                        <div className="flex flex-col gap-2">
+                            {lobbyPlayers.map(p => (
+                                <div key={p.userId} className="flex items-center gap-2 bg-zinc-800/50 px-3 py-2 rounded-lg">
+                                    <div className="w-2 h-2 bg-emerald-400 rounded-full" />
+                                    <span className="text-white font-semibold text-sm">{p.username}</span>
+                                    {p.userId === 'self' && <span className="text-zinc-500 text-xs">(you)</span>}
+                                </div>
+                            ))}
+                        </div>
                     </div>
 
                     <div className="bg-zinc-900/50 rounded-2xl p-4 border border-white/5 flex flex-col gap-3">
@@ -354,9 +470,16 @@ function HangmanGameClient() {
 
     return (
         <div className="select-none bg-[#171124] flex flex-col items-center justify-between w-full min-h-dvh py-2 overflow-hidden relative">
+            {/* Disconnect notification banner */}
+            {disconnectNotification && (
+                <div className="absolute top-0 left-0 right-0 z-50 bg-rose-600/90 text-white text-center py-2 font-semibold text-sm animate-in slide-in-from-top">
+                    {disconnectNotification}
+                </div>
+            )}
+
             <GameHeader
                 lives={lives}
-                totalLives={TOTAL_LIVES}
+                totalLives={totalLivesState}
                 time={displayTime}
                 onGiveUp={giveUp}
             />
@@ -385,6 +508,13 @@ function HangmanGameClient() {
                         <h2 className="text-3xl font-black text-white font-fredoka">
                             {isFullyCompleted ? "Round Complete!" : "Waiting for players..."}
                         </h2>
+
+                        {word && (
+                            <div className="flex flex-col items-center bg-black/40 rounded-xl py-3 px-6 border border-white/5 w-full">
+                                <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-1">The word was</span>
+                                <span className="text-2xl font-black text-white tracking-widest">{word}</span>
+                            </div>
+                        )}
                         
                         <div className="w-full bg-zinc-900/50 rounded-xl p-4 border border-white/5 max-h-[250px] overflow-y-auto">
                             <div className="flex justify-between items-center mb-2 px-2 pb-2 border-b border-white/10 text-xs font-bold text-zinc-400 uppercase tracking-widest">
@@ -406,35 +536,47 @@ function HangmanGameClient() {
                                     </div>
                                 </div>
                             ))}
-                            {finishedPlayers.length < lobbyPlayersCount && (
-                                <div className="flex justify-between items-center py-2 px-2 opacity-50">
-                                    <span className="text-white italic">Waiting...</span>
-                                    <span className="text-zinc-500 font-mono">--</span>
+                            {lobbyPlayers
+                                .filter(lp => !finishedPlayers.some(fp => fp.userId === lp.userId) && !disconnectedPlayers.has(lp.userId))
+                                .map((lp, idx) => (
+                                <div key={`playing-${idx}`} className="flex justify-between items-center py-2 px-2 opacity-50 border-t border-white/5">
+                                    <span className="text-white italic flex items-center gap-2 truncate max-w-[150px]">
+                                        <div className="w-3 h-3 border-2 border-violet-500 border-t-transparent rounded-full animate-spin shrink-0"></div>
+                                        {lp.userId === 'self' ? 'You' : lp.username}
+                                    </span>
+                                    <span className="text-zinc-500 font-mono text-[10px] animate-pulse">Playing...</span>
                                 </div>
-                            )}
+                            ))}
+                            {[...disconnectedPlayers].filter(id => !finishedPlayers.some(fp => fp.userId === id)).map((id, idx) => {
+                                const lp = lobbyPlayers.find(p => p.userId === id);
+                                return (
+                                <div key={`disc-${idx}`} className="flex justify-between items-center py-2 px-2 opacity-30 border-t border-white/5">
+                                    <span className="text-white italic truncate max-w-[150px] line-through">{lp ? lp.username : 'Unknown'}</span>
+                                    <span className="text-rose-500/50 font-mono text-[10px]">Left</span>
+                                </div>
+                                );
+                            })}
                         </div>
 
-                        {isFullyCompleted && (
-                            <div className="flex gap-4 w-full mt-2">
-                                {nextRoundData && (
-                                    <button 
-                                        onClick={() => {
-                                            setShowMultiplayerLeaderboard(false);
-                                            handleNextRound();
-                                        }}
-                                        className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-black tracking-widest uppercase py-3 rounded-xl transition-colors"
-                                    >
-                                        Next Round
-                                    </button>
-                                )}
+                        <div className="flex gap-4 w-full mt-2">
+                            {isFullyCompleted && nextRoundData && (
                                 <button 
-                                    onClick={() => router.push('/')}
-                                    className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold uppercase tracking-widest py-3 rounded-xl transition-colors"
+                                    onClick={() => {
+                                        setShowMultiplayerLeaderboard(false);
+                                        handleNextRound();
+                                    }}
+                                    className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-black tracking-widest uppercase py-3 rounded-xl transition-colors"
                                 >
-                                    Main Menu
+                                    Next Round
                                 </button>
-                            </div>
-                        )}
+                            )}
+                            <button 
+                                onClick={() => router.push('/')}
+                                className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold uppercase tracking-widest py-3 rounded-xl transition-colors"
+                            >
+                                {isFullyCompleted ? "Main Menu" : "Leave Game"}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

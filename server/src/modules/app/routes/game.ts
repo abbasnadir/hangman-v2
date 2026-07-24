@@ -28,53 +28,31 @@ const gameRouter: RouterObject = {
         const lives: number = res.locals.query.totalLives;
         const numberOfWords: number = res.locals.query.number_of_words;
 
-        const { data: wordlistData, error: wordlistError } = await supabase
-          .from("wordlists")
-          .select("id, words")
-          .eq("id", wordlist)
-          .or(`is_public.eq.true,owner_id.eq.${req.user.id},default.eq.true`)
-          .single();
+        // ── Parallel validation: wordlist, game mode, and active-game check ──
+        const [wordlistResult, gameModeResult, activeGames] = await Promise.all([
+          supabase
+            .from("wordlists")
+            .select("id, words")
+            .eq("id", wordlist)
+            .or(`is_public.eq.true,owner_id.eq.${req.user.id},default.eq.true`)
+            .single(),
+          supabase
+            .from("game_modes")
+            .select("id")
+            .eq("id", mode)
+            .single(),
+          fetchUserActiveGameRound(req.user.id),
+        ]);
 
-        if (wordlistError) {
-          throw new BadRequestError(wordlistError.message);
-        }
+        if (wordlistResult.error) throw new BadRequestError(wordlistResult.error.message);
+        if (!wordlistResult.data) throw new NotFoundError("Wordlist not found");
 
-        if (!wordlistData) {
-          throw new NotFoundError("Wordlist not found");
-        }
+        if (gameModeResult.error) throw new BadRequestError(gameModeResult.error.message);
+        if (!gameModeResult.data) throw new NotFoundError("Game mode not found");
 
-        const { data: gameMode, error: gameModeError } = await supabase
-          .from("game_modes")
-          .select("id")
-          .eq("id", mode)
-          .single();
-
-        if (gameModeError) {
-          throw new BadRequestError(gameModeError.message);
-        }
-
-        if (!gameMode) {
-          throw new NotFoundError("Game mode not found");
-        }
-
-        // Cleanup old inactive games (status = 'created' but never joined)
-        const { data: staleGames } = await supabase
-          .from("games")
-          .select("id")
-          .eq("created_by", req.user.id)
-          .eq("status", "created");
-        
-        if (staleGames && staleGames.length > 0) {
-          const staleIds = staleGames.map(g => g.id);
-          await supabase.from("game_rounds").delete().in("game_id", staleIds);
-          await supabase.from("games").delete().in("id", staleIds);
-        }
-
-        const gameData = await fetchUserActiveGameRound(req.user.id);
-
-        if (gameData.length > 0) {
+        if (activeGames.length > 0) {
           // @ts-ignore - dynamic join properties
-          const existingGameId = gameData[0].game_rounds.game_id;
+          const existingGameId = activeGames[0].game_rounds.game_id;
           res.status(400).json({
             error: {
               code: "ACTIVE_GAME_EXISTS",
@@ -85,6 +63,32 @@ const gameRouter: RouterObject = {
           return;
         }
 
+        // ── Fire-and-forget: cleanup stale games (no need to block response) ──
+        (async () => {
+          try {
+            const { data: staleGames } = await supabase
+              .from("games")
+              .select("id")
+              .eq("created_by", req.user.id)
+              .eq("status", "created");
+            if (staleGames && staleGames.length > 0) {
+              const staleIds = staleGames.map(g => g.id);
+              // Find round IDs first
+              const { data: staleRounds } = await supabase.from("game_rounds").select("id").in("game_id", staleIds);
+              if (staleRounds && staleRounds.length > 0) {
+                  const staleRoundIds = staleRounds.map(r => r.id);
+                  await supabase.from("game_round_players").delete().in("game_round_id", staleRoundIds);
+              }
+              await supabase.from("game_rounds").delete().in("game_id", staleIds);
+              await supabase.from("game_players").delete().in("game_id", staleIds);
+              await supabase.from("games").delete().in("id", staleIds);
+            }
+          } catch (e) {
+            console.error("Stale game cleanup:", e);
+          }
+        })();
+
+        // ── Create game + round (sequential — round needs game ID) ──
         const { data: newGame, error: newGameError } = await supabase
           .from("games")
           .insert({
@@ -106,8 +110,8 @@ const gameRouter: RouterObject = {
           .insert({
             game_id: newGame.id,
             round_index: 1,
-            word: wordlistData.words[
-              Math.floor(Math.random() * wordlistData.words.length)
+            word: wordlistResult.data.words[
+              Math.floor(Math.random() * wordlistResult.data.words.length)
             ],
             status: 'in_progress'
           })
@@ -115,7 +119,7 @@ const gameRouter: RouterObject = {
           .single();
 
         if (newRoundError || !newRound) {
-          // If round creation fails, we should clean up the created game to avoid orphaned records.
+          // If round creation fails, clean up the created game
           await supabase.from("games").delete().eq("id", newGame.id);
           throw (
             newRoundError || new Error("Failed to create a new game round.")
@@ -138,7 +142,6 @@ const gameRouter: RouterObject = {
           throw new BadRequestError("gameId is required");
         }
 
-        // Verify the user is actually in this game
         const { data: playerRecord } = await supabase
           .from("game_players")
           .select("id")
@@ -146,7 +149,13 @@ const gameRouter: RouterObject = {
           .eq("user_id", userId)
           .maybeSingle();
 
-        if (!playerRecord) {
+        const { data: gameRecord } = await supabase
+          .from("games")
+          .select("created_by")
+          .eq("id", gameId)
+          .maybeSingle();
+
+        if (!playerRecord && gameRecord?.created_by !== userId) {
           throw new NotFoundError("You are not a player in this game");
         }
 

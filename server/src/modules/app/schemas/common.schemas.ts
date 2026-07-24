@@ -70,4 +70,4 @@ export const reasonableWordSchema = z
     "Word can only contain letters, spaces and hyphens",
   )
   .min(2, "Word must be at least 2 letters long.")
-  .max(20, "Word must be at most 20 letters long.");
+  .max(40, "Word must be at most 40 letters long.");

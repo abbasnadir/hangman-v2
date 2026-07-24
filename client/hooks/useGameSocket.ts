@@ -17,9 +17,14 @@ export const useGameSocket = (gameId: string | null) => {
         try {
             console.log(`[useGameSocket] Connecting to game: ${gameId}`);
             await socketService.connect();
-            console.log(`[useGameSocket] Connected! Emitting game:join for ${gameId}`);
+            console.log(`[useGameSocket] Connected! Setting isConnected=true`);
             setIsConnected(true);
-            socketService.emit('game:join', { gameId });
+            // Defer the game:join emit to the next macrotask so React's
+            // useListener effects have time to register their handlers
+            // on the socket before any response arrives.
+            setTimeout(() => {
+                socketService.emit('game:join', { gameId });
+            }, 0);
         } catch (error) {
             console.error('[useGameSocket] Failed to connect socket:', error);
         }
@@ -37,6 +42,11 @@ export const useGameSocket = (gameId: string | null) => {
 
     const submitMove = useCallback((move: Move) => {
         socketService.emit('game:submit_move', move);
+    }, []);
+
+    const forfeitGame = useCallback(() => {
+        console.log('[useGameSocket] Emitting game:leave for forfeit');
+        socketService.emit('game:leave', {});
     }, []);
 
     const leaveGame = useCallback(() => {
@@ -85,6 +95,7 @@ export const useGameSocket = (gameId: string | null) => {
         startNextRound,
         submitMove,
         leaveGame,
+        forfeitGame,
         useListener,
         socketService,
         isConnected

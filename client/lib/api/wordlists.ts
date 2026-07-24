@@ -14,6 +14,8 @@ const getAuthToken = async () => {
   return session?.access_token || '';
 };
 
+let allAvailableWordlistsCache: Wordlist[] | null = null;
+
 export const WordlistAPI = {
   getDefaultWordlists: async (): Promise<Wordlist[]> => {
     const token = await getAuthToken();
@@ -32,7 +34,10 @@ export const WordlistAPI = {
 
     return response.json();
   },
-  getAllAvailableWordlists: async (): Promise<Wordlist[]> => {
+  getAllAvailableWordlists: async (forceRefresh: boolean = false): Promise<Wordlist[]> => {
+    if (!forceRefresh && allAvailableWordlistsCache) {
+      return allAvailableWordlistsCache;
+    }
     const token = await getAuthToken();
     if (!token) throw new Error('Not authenticated');
 
@@ -50,6 +55,7 @@ export const WordlistAPI = {
     // Combine and remove duplicates by ID
     const combined = [...defaults, ...my];
     const unique = Array.from(new Map(combined.map(w => [w.id, w])).values());
+    allAvailableWordlistsCache = unique;
     return unique;
   },
 
@@ -88,6 +94,7 @@ export const WordlistAPI = {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error?.message || 'Failed to create wordlist');
     }
+    allAvailableWordlistsCache = null;
     return response.json();
   },
 
@@ -108,6 +115,7 @@ export const WordlistAPI = {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error?.message || 'Failed to update wordlist');
     }
+    allAvailableWordlistsCache = null;
     return response.json();
   },
 
@@ -128,6 +136,7 @@ export const WordlistAPI = {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error?.message || 'Failed to delete wordlist');
     }
+    allAvailableWordlistsCache = null;
   },
 
   searchPublicWordlists: async (query: string, page: number = 1, limit: number = 20): Promise<Wordlist[]> => {

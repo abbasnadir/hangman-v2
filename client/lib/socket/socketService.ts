@@ -44,14 +44,19 @@ class SocketService {
 
           this.socket.on('connect_error', (error) => {
             console.error('[SocketService] Connect Error:', error);
+            // Clear the promise so the next connect() call can retry
+            this.connectionPromise = null;
             reject(error);
           });
 
           this.socket.on('disconnect', (reason) => {
             console.log('[SocketService] Disconnected. Reason:', reason);
+            // Clear the promise so a future connect() call creates a fresh socket
+            this.connectionPromise = null;
           });
         } catch (err) {
           console.error('[SocketService] Error preparing connection:', err);
+          this.connectionPromise = null;
           reject(err);
         }
       });
@@ -65,6 +70,7 @@ class SocketService {
   disconnect() {
     console.log('[SocketService] Disconnecting manually...');
     if (this.socket) {
+      this.socket.removeAllListeners();
       this.socket.disconnect();
       this.socket = null;
     }

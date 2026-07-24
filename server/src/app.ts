@@ -15,6 +15,7 @@ import { routesHandler } from "./modules/app/lib/routeHandler.js";
 import { errorHandler } from "./modules/app/middlewares/errorHandler.js";
 import { NotFoundError } from "./modules/shared/errors/httpErrors.js";
 const app: Express = express();
+app.set("trust proxy", 1);
 const __dirname = import.meta.dirname;
 
 // External Middlewares

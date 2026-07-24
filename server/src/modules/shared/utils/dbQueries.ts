@@ -69,26 +69,28 @@ export async function markPlayerAsActive(roundPlayerId: string) {
   if (error) throw new Error(error.message);
 }
 
-export async function markPlayerAsDisconnected(roundPlayerId: string) {
+export async function markPlayerAsDisconnectedByRound(roundId: string, userId: string) {
   // Unconditionally set left_at
   const { error: leftAtError } = await supabase
     .from("game_round_players")
     .update({ left_at: new Date().toISOString() })
-    .eq("id", roundPlayerId);
+    .eq("game_round_id", roundId)
+    .eq("user_id", userId);
 
   if (leftAtError) {
-    console.error(`Failed to set left_at for player ${roundPlayerId}:`, leftAtError.message);
+    console.error(`Failed to set left_at for player ${userId} in round ${roundId}:`, leftAtError.message);
   }
 
   // Only mark as abandoned if the round hasn't naturally concluded for them
   const { error } = await supabase
     .from("game_round_players")
     .update({ result: 'abandoned' })
-    .eq("id", roundPlayerId)
+    .eq("game_round_id", roundId)
+    .eq("user_id", userId)
     .is("result", null);
 
   if (error) {
-    console.error(`Failed to set result to abandoned for player ${roundPlayerId}:`, error.message);
+    console.error(`Failed to set result to abandoned for player ${userId} in round ${roundId}:`, error.message);
   }
 }
 
@@ -107,7 +109,7 @@ export async function abandonGameAndRound(gameId: string, roundId: string) {
   const { error: roundError } = await supabase
     .from("game_rounds")
     .update({ status: "abandoned", finished_at: new Date().toISOString() })
-    .eq("id", roundId)
+    .eq("game_id", gameId)
     .in("status", ["in_progress"]);
 
   if (roundError) throw new Error(roundError.message);
@@ -136,7 +138,7 @@ export async function insertMove(moveToInsert: any) {
 export async function updateRoundPlayerResult(roundId: string, userId: string, result: string) {
   const { error } = await supabase
     .from("game_round_players")
-    .update({ result })
+    .update({ result, left_at: new Date().toISOString() })
     .eq("game_round_id", roundId)
     .eq("user_id", userId);
   if (error) throw new Error(error.message);
@@ -179,14 +181,16 @@ export async function getUsedWordsInGame(gameId: string) {
   return new Set((data || []).map(r => r.word?.toLowerCase()));
 }
 
-export async function insertNewRound(gameId: string, roundIndex: number, word: string) {
-  const { data, error } = await supabase.from("game_rounds").insert({
+export async function insertNewRound(gameId: string, roundIndex: number, word: string, id?: string) {
+  const payload: Record<string, unknown> = {
     game_id: gameId,
     round_index: roundIndex,
     status: "in_progress",
     word: word,
     started_at: new Date().toISOString()
-  }).select("id").single();
+  };
+  if (id) payload.id = id;
+  const { data, error } = await supabase.from("game_rounds").insert(payload).select("id").single();
 
   if (error) throw new Error(error.message);
   return data;

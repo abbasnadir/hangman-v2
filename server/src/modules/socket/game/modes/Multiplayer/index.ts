@@ -1,32 +1,36 @@
-import { GameMode, type ProcessMoveResult } from "./defModes.js";
-import type { GameInfo, move } from "../../shared/types/GameInfo.js";
-import { Player } from "./Player.js";
+import { GameMode } from "../../core/GameMode.js";
+import type { GameInfo, move } from "../../../../shared/types/GameInfo.js";
+import { Player } from "../../core/Player.js";
+import type { ProcessMoveResult } from "../../core/types.js";
 
-export class Classic extends GameMode {
+export class Multiplayer extends GameMode {
     winner: string | null = null;
+    minTime: number = Infinity;
+    scores: Record<string, number> = {};
 
     constructor(lives: number = 5) {
-        super("Classic", 1, 1, lives);
+        super("Multiplayer", 2, 50, lives);
     }
 
     satisfies(players_count: number): boolean {
-        return players_count === 1;
+        return players_count >= this.min_players && players_count <= this.max_players;
     }
 
     processMove(userId: string, move: move, _gameState: Partial<GameInfo>): ProcessMoveResult {
         if (!this.players[userId]) {
             this.players[userId] = new Player(userId, this.lives);
+            if (this.scores[userId] === undefined) this.scores[userId] = 0;
         }
 
         const player = this.players[userId];
+        const isRoundEnded = this.completedPlayersCount >= this.totalPlayersCount;
 
-        // Player already completed — return their final state
         if (player.completed) {
             return {
                 player,
                 processedMove: null,
                 playerResult: "in_progress", // Prevent duplicate orchestration
-                roundEnded: this.completedPlayersCount >= this.totalPlayersCount,
+                roundEnded: isRoundEnded,
                 hasNextRound: this.roundIndex < this.numberOfWords
             };
         }
@@ -59,7 +63,12 @@ export class Classic extends GameMode {
                 player.finish(this.startedAt);
                 this.completedPlayersCount++;
                 isCorrectCompletion = true;
-                if (!this.winner) { this.winner = userId; justWon = true; }
+                
+                const timeTaken = player.getTimeTaken(this.startedAt);
+                if (timeTaken < this.minTime) {
+                    this.minTime = timeTaken;
+                    this.winner = userId;
+                }
             }
         } else if (player.lives === 0) {
             player.finish(this.startedAt);
@@ -68,9 +77,19 @@ export class Classic extends GameMode {
 
         let playerResult: ProcessMoveResult["playerResult"] = "in_progress";
         if (player.completed) {
-            if (justWon) playerResult = "won";
-            else if (isCorrectCompletion) playerResult = "completed";
-            else playerResult = "lost";
+            if (userId === this.winner) {
+                playerResult = "won";
+            } else if (player.lives === 0) {
+                playerResult = "lost";
+            } else {
+                playerResult = "completed";
+            }
+            
+            // Award score immediately to the winner once they finish
+            if (userId === this.winner && !(this as any).roundScoreAwarded) {
+                this.scores[this.winner] = (this.scores[this.winner] || 0) + 1;
+                (this as any).roundScoreAwarded = true;
+            }
         }
 
         return {
@@ -85,9 +104,18 @@ export class Classic extends GameMode {
     resetRound(word: string): void {
         this.word = word;
         this.winner = null;
+        this.minTime = Infinity;
         this.players = {};
         this.completedPlayersCount = 0;
-        // this.startedAt = Date.now(); // will be set by GameMode when round actually starts
-        // totalPlayersCount is game-level — NOT reset here
+        (this as any).roundScoreAwarded = false;
+    }
+
+    getFinalResult(userId: string): string {
+        const maxScore = Math.max(0, ...Object.values(this.scores));
+        const winners = Object.keys(this.scores).filter(id => this.scores[id] === maxScore && maxScore > 0);
+        if (winners.includes(userId)) return "won";
+        const p = this.players[userId];
+        if (p && p.completed && p.lives > 0) return "completed";
+        return "lost";
     }
 }
