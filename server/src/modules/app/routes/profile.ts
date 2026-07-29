@@ -7,7 +7,7 @@ import {
 } from "../../shared/errors/httpErrors.js";
 import { z } from "zod";
 
-import { fetchProfileUpdateContext } from "../utils/dbQueries.js";
+import { fetchProfileUpdateContext } from "../../shared/utils/dbQueries.js";
 import {
   pfpValueSchema,
   statusValueSchema,

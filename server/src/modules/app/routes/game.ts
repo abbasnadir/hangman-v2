@@ -7,7 +7,7 @@ import {
 } from "../../shared/errors/httpErrors.js";
 import { z } from "zod";
 import { gameSchema } from "../schemas/gameSchema.js";
-import { fetchUserActiveGameRound } from "../../shared/utils/dbQueries.js";
+import { fetchUserActiveGameRound } from "../../shar../../shared/utils/dbQueries.js";
 
 /* GET home page. */
 const gameRouter: RouterObject = {

@@ -7,7 +7,7 @@ import {
 } from "../../shared/errors/httpErrors.js";
 import { z } from "zod";
 
-import { fetchUserWithId } from "../utils/dbQueries.js";
+import { fetchUserWithId } from "../../shared/utils/dbQueries.js";
 import { idSchema } from "../schemas/common.schemas.js";
 
 /* GET home page. */

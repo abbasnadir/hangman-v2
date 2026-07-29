@@ -14,4 +14,4 @@ export interface SocketRoute<TPayload = unknown> {
 }
 
 export type authorization = "required" | "optional" | "none" | "non-guest";
-export type rateLimit = "strict" | "game_move" | "read";
+export type rateLimit = "strict" | "game" | "game_move" | "read";

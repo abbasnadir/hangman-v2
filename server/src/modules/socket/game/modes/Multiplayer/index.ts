@@ -1,7 +1,15 @@
+import { onMoveSubmitted } from "../shared/helpers/onMoveSubmitted.js";
+import { onPlayerFinished } from "./actions/onPlayerFinished.js";
+import { triggerRoundTransitionIfNeeded } from "./actions/triggerRoundTransitionIfNeeded.js";
+import { handleStart } from "./actions/handleStart.js";
+import { handleSubmitMove } from "./actions/handleSubmitMove.js";
+import { handleDisconnect } from "./actions/handleDisconnect.js";
+import { handleLeave } from "./actions/handleLeave.js";
+import { handleJoin } from "./actions/handleJoin.js";
 import { GameMode } from "../../core/GameMode.js";
 import type { GameInfo, move } from "../../../../shared/types/GameInfo.js";
 import { Player } from "../../core/Player.js";
-import type { ProcessMoveResult } from "../../core/types.js";
+import type { ProcessMoveResult } from "../../../types/gameCore.js";
 
 export class Multiplayer extends GameMode {
     winner: string | null = null;
@@ -118,4 +126,14 @@ export class Multiplayer extends GameMode {
         if (p && p.completed && p.lives > 0) return "completed";
         return "lost";
     }
+
+    handleStart = handleStart;
+    handleSubmitMove = handleSubmitMove;
+    handleDisconnect = handleDisconnect;
+    handleLeave = handleLeave;
+    handleJoin = handleJoin;
+
+    onMoveSubmitted = onMoveSubmitted;
+    onPlayerFinished = onPlayerFinished;
+    triggerRoundTransitionIfNeeded = triggerRoundTransitionIfNeeded;
 }

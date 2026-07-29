@@ -112,10 +112,9 @@ function HangmanGameClient() {
             const existing = Array.isArray(data.existingPlayers) ? data.existingPlayers : [];
             const myIndex = existing.findIndex((p: any) => p.userId === data.userId);
             if (myIndex !== -1) {
-                // If the backend already sent us in existing, just map it out to identify 'self'
-                setLobbyPlayers(existing.map((p: any) => p.userId === data.userId ? { ...p, userId: 'self' } : p));
+                setLobbyPlayers(existing);
             } else {
-                setLobbyPlayers([{ userId: 'self', username: data.username || 'You' }, ...existing]);
+                setLobbyPlayers([{ userId: data.userId, username: data.username || 'You' }, ...existing]);
             }
             // Auto-start only for single player if not reconnected/started
             if (parsedModeId === 1 && !data.started) {
@@ -138,9 +137,7 @@ function HangmanGameClient() {
         }
         
         if (data.existingPlayers && Array.isArray(data.existingPlayers)) {
-            setLobbyPlayers(data.existingPlayers.map((p: any) => 
-                p.userId === myUserIdRef.current ? { ...p, userId: 'self' } : p
-            ));
+            setLobbyPlayers(data.existingPlayers);
         } else if (data.userId && data.username) {
             // Fallback for older events without existingPlayers
             setLobbyPlayers(prev => {
@@ -212,7 +209,7 @@ function HangmanGameClient() {
         if (modeId === 2) {
             setShowMultiplayerLeaderboard(true);
             setFinishedPlayers(prev => {
-                const newPlayer = { userId: data.userId || 'You', username: data.username || 'You', pfp: data.pfp, result: 'won', timeTakenMs: data.timeTakenMs, lives, score: data.score };
+                const newPlayer = { userId: data.userId || myUserIdRef.current || 'You', username: data.username || 'You', pfp: data.pfp, result: 'won', timeTakenMs: data.timeTakenMs, lives, score: data.score };
                 if (prev.some(p => p.userId === newPlayer.userId)) return prev.map(p => p.userId === newPlayer.userId ? newPlayer : p);
                 return [...prev, newPlayer];
             });
@@ -226,7 +223,7 @@ function HangmanGameClient() {
         if (modeId === 2) {
             setShowMultiplayerLeaderboard(true);
             setFinishedPlayers(prev => {
-                const newPlayer = { userId: data.userId || 'You', username: data.username || 'You', pfp: data.pfp, result: 'lost', timeTakenMs: data.timeTakenMs || 0, lives: 0, score: data.score };
+                const newPlayer = { userId: data.userId || myUserIdRef.current || 'You', username: data.username || 'You', pfp: data.pfp, result: 'lost', timeTakenMs: data.timeTakenMs || 0, lives: 0, score: data.score };
                 if (prev.some(p => p.userId === newPlayer.userId)) return prev.map(p => p.userId === newPlayer.userId ? newPlayer : p);
                 return [...prev, newPlayer];
             });
@@ -251,7 +248,7 @@ function HangmanGameClient() {
         if (modeId === 2) {
             setShowMultiplayerLeaderboard(true);
             setFinishedPlayers(prev => {
-                const newPlayer = { userId: data.userId || 'You', username: data.username || 'You', pfp: data.pfp, result: 'completed', timeTakenMs: data.timeTakenMs, lives, score: data.score };
+                const newPlayer = { userId: data.userId || myUserIdRef.current || 'You', username: data.username || 'You', pfp: data.pfp, result: 'completed', timeTakenMs: data.timeTakenMs, lives, score: data.score };
                 if (prev.some(p => p.userId === newPlayer.userId)) return prev.map(p => p.userId === newPlayer.userId ? newPlayer : p);
                 return [...prev, newPlayer];
             });
@@ -268,7 +265,7 @@ function HangmanGameClient() {
         if (modeId === 2) {
             setShowMultiplayerLeaderboard(true);
             setFinishedPlayers(prev => {
-                const newPlayer = { userId: data.userId || 'You', username: data.username || 'You', pfp: data.pfp, result: data.roundResult, timeTakenMs: data.timeTakenMs, lives, score: data.score };
+                const newPlayer = { userId: data.userId || myUserIdRef.current || 'You', username: data.username || 'You', pfp: data.pfp, result: data.roundResult, timeTakenMs: data.timeTakenMs, lives, score: data.score };
                 if (prev.some(p => p.userId === newPlayer.userId)) return prev.map(p => p.userId === newPlayer.userId ? newPlayer : p);
                 return [...prev, newPlayer];
             });
@@ -295,7 +292,7 @@ function HangmanGameClient() {
             setGameResult(data.result);
             setStatus('ended');
         }
-        if (data && data.leaderboard) {
+        if (data && data.leaderboard && modeId === 2) {
             setShowMultiplayerLeaderboard(true);
             setFinishedPlayers(data.leaderboard.map((p: any) => ({
                 userId: p.userId,
@@ -345,6 +342,7 @@ function HangmanGameClient() {
         setDisconnectedPlayers(new Set());
         setDisconnectNotification(null);
         setNextRoundData(null);
+        setIsFullyCompleted(false);
         startNextRound();
     };
 
@@ -411,7 +409,7 @@ function HangmanGameClient() {
                                 <div key={p.userId} className="flex items-center gap-2 bg-zinc-800/50 px-3 py-2 rounded-lg">
                                     <div className="w-2 h-2 bg-emerald-400 rounded-full" />
                                     <span className="text-white font-semibold text-sm">{p.username}</span>
-                                    {p.userId === 'self' && <span className="text-zinc-500 text-xs">(you)</span>}
+                                    {p.userId === myUserIdRef.current && <span className="text-zinc-500 text-xs">(you)</span>}
                                 </div>
                             ))}
                         </div>
@@ -542,7 +540,7 @@ function HangmanGameClient() {
                                 <div key={`playing-${idx}`} className="flex justify-between items-center py-2 px-2 opacity-50 border-t border-white/5">
                                     <span className="text-white italic flex items-center gap-2 truncate max-w-[150px]">
                                         <div className="w-3 h-3 border-2 border-violet-500 border-t-transparent rounded-full animate-spin shrink-0"></div>
-                                        {lp.userId === 'self' ? 'You' : lp.username}
+                                        {lp.userId === myUserIdRef.current ? 'You' : lp.username}
                                     </span>
                                     <span className="text-zinc-500 font-mono text-[10px] animate-pulse">Playing...</span>
                                 </div>

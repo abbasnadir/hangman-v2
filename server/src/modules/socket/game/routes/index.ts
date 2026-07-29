@@ -8,7 +8,7 @@ export const gameRoute: SocketRouteObject = {
     {
       event: "join",
       auth: "required",
-      rateLimit: "strict",
+      rateLimit: "game",
       zodSchema: joinGamePayloadSchema,
       handler: async (socket, payload) => {
         const { joinHandler } = await import("./join.js");
@@ -18,7 +18,7 @@ export const gameRoute: SocketRouteObject = {
     {
       event: "start",
       auth: "required",
-      rateLimit: "strict",
+      rateLimit: "game",
       handler: async (socket) => {
         const { startHandler } = await import("./start.js");
         return startHandler(socket);
@@ -37,7 +37,7 @@ export const gameRoute: SocketRouteObject = {
     {
       event: "start_next_round",
       auth: "required",
-      rateLimit: "strict",
+      rateLimit: "game",
       handler: async (socket) => {
         const { nextRoundHandler } = await import("./nextRound.js");
         return nextRoundHandler(socket);
@@ -46,7 +46,7 @@ export const gameRoute: SocketRouteObject = {
     {
       event: "leave",
       auth: "required",
-      rateLimit: "strict",
+      rateLimit: "game",
       handler: async (socket) => {
         const { leaveHandler } = await import("./leave.js");
         return leaveHandler(socket);

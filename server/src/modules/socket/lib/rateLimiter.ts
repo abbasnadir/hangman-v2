@@ -13,6 +13,7 @@ import {
 
 const limiters: Record<string, RateLimiterMemory> = {
   strict: new RateLimiterMemory({ points: 5, duration: 60 }),
+  game: new RateLimiterMemory({ points: 20, duration: 60 }),
   game_move: new RateLimiterMemory({ points: 150, duration: 60 }),
   read: new RateLimiterMemory({ points: 20, duration: 60 }),
 };

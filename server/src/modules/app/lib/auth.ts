@@ -8,7 +8,7 @@ import {
   NotFoundError,
 } from "../../shared/errors/httpErrors.js";
 import verifyJwt from "../../shared/lib/verifyJwt.js";
-import { fetchUserWithId } from "../utils/dbQueries.js";
+import { fetchUserWithId } from "../../shared/utils/dbQueries.js";
 
 /* An Auth Handler that takes authType
 and returns middleware to dynamically handle

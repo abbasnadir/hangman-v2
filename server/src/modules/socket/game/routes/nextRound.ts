@@ -1,7 +1,13 @@
 import type { Socket } from "socket.io";
-import { activeGameInstances } from "../utils/registry.js";
+import { activeGameInstances } from "../core/registry.js";
 import { Player } from "../core/Player.js";
 
+/**
+ * Handles the "game:start_next_round" socket event.
+ * 
+ * This is primarily used in Classic mode (or when host manually triggers the next round).
+ * Retrieves the game instance and delegates to the mode's handleStartNextRound method.
+ */
 export const nextRoundHandler = async (socket: Socket) => {
     const userId = socket.data.user.id;
     const currentGameId = socket.data.user.currentGameId;

@@ -17,7 +17,10 @@ class SocketService {
       console.log('[SocketService] Starting new connection...');
       this.connectionPromise = new Promise(async (resolve, reject) => {
         try {
-          let { data: { session } } = await supabase.auth.getSession();
+          let { data: { session }, error: sessionError } = await supabase.auth.getSession();
+          if (sessionError) {
+              console.error('[SocketService] Error getting session:', sessionError);
+          }
           
           if (!session?.access_token) {
             console.log('[SocketService] No auth session found, creating guest account...');

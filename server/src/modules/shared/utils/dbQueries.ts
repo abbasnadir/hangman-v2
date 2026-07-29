@@ -209,3 +209,145 @@ export async function insertRoundPlayers(roundPlayersToInsert: any[]) {
 }
 
 export default fetchUserActiveGameRound;
+
+export async function getProfile(userId: string) {
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, username, pfp")
+    .eq("id", userId)
+    .single();
+  return data ?? null;
+}
+
+export async function updateGameStatus(gameId: string, status: string, startedAt: string) {
+  await supabase.from("games").update({ status, started_at: startedAt }).eq("id", gameId);
+}
+
+export async function updateRoundStatus(roundId: string, status: string, startedAt: string) {
+  await supabase.from("game_rounds").update({ status, started_at: startedAt }).eq("id", roundId);
+}
+
+
+type ProfileUpdateLookup = {
+  id: string;
+  username: string;
+  username_updated_at: string | null;
+  pfp_updated_at: string | null;
+};
+
+export async function fetchUserWithUsername(
+  username: string,
+): Promise<{ id: string } | null> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("username", username)
+    .is("deleted_at", null)
+    .single();
+
+  if (error && error.code !== "PGRST116") {
+    //PGRST116 is the error code for "No rows found", which is expected if the username doesn't exist
+    throw error;
+  }
+
+  return data;
+}
+
+export async function fetchUserWithId(
+  userId: string,
+): Promise<{ id: string } | null> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("id", userId)
+    .is("deleted_at", null)
+    .single();
+
+  if (error && error.code !== "PGRST116") {
+    //PGRST116 is the error code for "No rows found", which is expected if the username doesn't exist
+    throw error;
+  }
+
+  return data;
+}
+
+export async function fetchProfileUpdateContext(
+  userId: string,
+  username?: string,
+): Promise<{
+  currentProfile: ProfileUpdateLookup | null;
+  usernameOwner: ProfileUpdateLookup | null;
+}> {
+  const columns = "id, username, username_updated_at, pfp_updated_at";
+
+  if (!username) {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select(columns)
+      .eq("id", userId)
+      .is("deleted_at", null)
+      .single();
+
+    if (error && error.code !== "PGRST116") {
+      throw error;
+    }
+
+    return {
+      currentProfile: data,
+      usernameOwner: null,
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select(columns)
+    .or(`id.eq.${userId},username.eq.${JSON.stringify(username)}`)
+    .is("deleted_at", null);
+
+  if (error) {
+    throw error;
+  }
+
+  return {
+    currentProfile: data.find((profile) => profile.id === userId) ?? null,
+    usernameOwner:
+      data.find((profile) => profile.username === username) ?? null,
+  };
+}
+
+export async function fetchGameStatus(gameId: string) {
+  const { data, error } = await supabase
+    .from("games")
+    .select("status, mode_id, created_by, total_lives, wordlist_id, number_of_words")
+    .eq("id", gameId)
+    .single();
+  return { data, error };
+}
+
+export async function fetchRoundInfo(roundId: string) {
+  const { data, error } = await supabase
+    .from("game_rounds")
+    .select("word, round_index, started_at")
+    .eq("id", roundId)
+    .single();
+  return { data, error };
+}
+
+export async function insertGamePlayer(gameId: string, userId: string) {
+  const { error } = await supabase.from("game_players").insert({ game_id: gameId, user_id: userId });
+  return { error };
+}
+
+export async function insertGameRoundPlayer(roundId: string, userId: string) {
+  const { data, error } = await supabase
+    .from("game_round_players")
+    .insert({ game_round_id: roundId, user_id: userId })
+    .select("id")
+    .single();
+  return { data, error };
+}
+
+export async function deleteGamePlayer(gameId: string, userId: string) {
+  await supabase.from("game_players").delete().match({ game_id: gameId, user_id: userId });
+}
+export async function getGameRoundPlayers(roundId: string) { const { data } = await supabase.from("game_round_players").select("user_id").eq("game_round_id", roundId).is("left_at", null); return data; }
