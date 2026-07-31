@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from 'next/navigation';
 import Card from "@/components/Card";
 import { Gamepad2, Swords, History, LogIn, X, Play, LogOut, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { GameAPI } from "@/lib/api/game";
 import { WordlistAPI, Wordlist } from "@/lib/api/wordlists";
 
@@ -191,20 +193,22 @@ export default function Home() {
             <h2 className="text-2xl text-white font-black font-fredoka tracking-wider">ACTIVE GAME FOUND</h2>
             <p className="text-zinc-400 font-semibold text-sm">You are already in an active game session. What would you like to do?</p>
             <div className="flex gap-4">
-              <button 
+              <Button 
                 onClick={abandonActiveGame}
                 disabled={loading}
-                className="flex-1 bg-zinc-800 hover:bg-zinc-700 transition-colors text-zinc-300 py-3 rounded-xl font-bold uppercase tracking-wider shadow-inner"
+                variant="secondary"
+                className="flex-1 shadow-inner"
               >
                 {loading ? 'WAIT...' : 'FORFEIT'}
-              </button>
-              <button 
+              </Button>
+              <Button 
                 onClick={() => router.push(`/game?id=${pendingActiveGame}`)}
                 disabled={loading}
-                className="flex-1 bg-emerald-500 hover:bg-emerald-400 transition-colors text-emerald-950 py-3 rounded-xl font-bold uppercase tracking-wider shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                variant="emerald"
+                className="flex-1"
               >
                 REJOIN
-              </button>
+              </Button>
             </div>
           </div>
         ) : !session ? (
@@ -247,24 +251,27 @@ export default function Home() {
             </Card>
 
             <div className="flex justify-center gap-4 mt-6">
-              <button 
+              <Button 
                 onClick={() => router.push('/logs')}
-                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-6 py-3 rounded-full border border-white/10 transition-colors font-bold flex items-center gap-2"
+                variant="secondary"
+                className="rounded-full flex items-center gap-2"
               >
                 <History className="w-5 h-5" /> History
-              </button>
-              <button 
+              </Button>
+              <Button 
                 onClick={() => router.push('/wordlists')}
-                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-6 py-3 rounded-full border border-white/10 transition-colors font-bold flex items-center gap-2"
+                variant="secondary"
+                className="rounded-full flex items-center gap-2"
               >
                 <Swords className="w-5 h-5" /> Wordlists
-              </button>
-              <button 
+              </Button>
+              <Button 
                 onClick={async () => { await supabase.auth.signOut(); }}
-                className="bg-rose-900/40 hover:bg-rose-800/60 text-rose-300 px-6 py-3 rounded-full border border-rose-500/20 transition-colors font-bold flex items-center gap-2"
+                variant="danger"
+                className="rounded-full flex items-center gap-2"
               >
                 <LogOut className="w-5 h-5" /> Logout
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
@@ -277,33 +284,33 @@ export default function Home() {
               <div className="flex justify-between items-center px-1">
                 <div className="flex items-center gap-2">
                   <label className="text-zinc-400 text-xs font-bold uppercase tracking-widest">Select Wordlist</label>
-                  <button onClick={() => loadWordlists(true)} disabled={loadingWordlists} className={`text-zinc-400 hover:text-violet-400 transition-colors ${loadingWordlists ? 'animate-spin' : ''}`} title="Refresh Wordlists">
+                  <Button onClick={() => loadWordlists(true)} disabled={loadingWordlists} variant="ghost" size="icon" className={loadingWordlists ? 'animate-spin' : ''} title="Refresh Wordlists">
                     <RefreshCw className="w-4 h-4" />
-                  </button>
+                  </Button>
                 </div>
                 {searchQuery || wordlists.length === 0 || !wordlists.some(w => w.default) ? (
-                  <button onClick={handleResetWordlists} className="text-[10px] text-violet-400 font-bold uppercase hover:text-violet-300 transition-colors">
+                  <Button onClick={handleResetWordlists} variant="ghost" className="text-[10px] uppercase">
                     My Library
-                  </button>
+                  </Button>
                 ) : null}
               </div>
               
               <div className="flex gap-2">
-                <input 
+                <Input 
                   type="text"
                   placeholder="Search public wordlists..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleSearchWordlists()}
-                  className="bg-[#171124] text-white border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-violet-500 transition-colors font-semibold shadow-inner flex-1 text-sm"
+                  className="flex-1"
                 />
-                <button 
+                <Button 
                   onClick={handleSearchWordlists}
                   disabled={isSearching}
-                  className="bg-violet-600 hover:bg-violet-500 text-white px-4 rounded-xl font-bold transition-colors text-sm uppercase tracking-widest"
+                  variant="primary"
                 >
                   {isSearching ? '...' : 'Search'}
-                </button>
+                </Button>
               </div>
 
               <select 
@@ -320,30 +327,31 @@ export default function Home() {
 
             <div className="flex flex-col gap-1">
               <label className="text-zinc-400 text-xs font-bold uppercase tracking-widest pl-1">Number of Words</label>
-              <input 
+              <Input 
                 type="number"
                 min="1"
                 max="10"
-                className="bg-[#171124] text-white border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-violet-500 transition-colors font-semibold shadow-inner"
                 value={numberOfWords}
                 onChange={(e) => setNumberOfWords(Number(e.target.value))}
               />
             </div>
 
             <div className="flex gap-3 mt-4">
-              <button 
+              <Button 
                 onClick={() => setShowGameMenu(false)}
-                className="flex items-center justify-center gap-2 flex-1 bg-zinc-800 hover:bg-zinc-700 transition-colors text-white py-3 rounded-xl font-bold uppercase tracking-widest"
+                variant="secondary"
+                className="flex-1 flex items-center justify-center gap-2"
               >
                 <X className="w-5 h-5" /> Cancel
-              </button>
-              <button 
+              </Button>
+              <Button 
                 onClick={createAndStartGame}
                 disabled={loading}
-                className="flex items-center justify-center gap-2 flex-1 bg-violet-600 hover:bg-violet-500 transition-colors text-white py-3 rounded-xl font-bold uppercase tracking-widest shadow-[0_0_15px_rgba(139,92,246,0.3)]"
+                variant="primary"
+                className="flex-1 flex items-center justify-center gap-2"
               >
                 {loading ? 'STARTING...' : <><Play className="w-5 h-5 fill-current" /> PLAY</>}
-              </button>
+              </Button>
             </div>
           </div>
         )}

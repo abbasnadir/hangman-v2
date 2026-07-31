@@ -2,6 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Badge } from "@/components/ui/Badge";
+import Card from "@/components/Card";
 import { LogsAPI, GameEntry } from '@/lib/api/logs';
 
 export default function LogsPage() {
@@ -47,15 +51,16 @@ export default function LogsPage() {
     <div className="bg-zinc-950 min-h-screen text-zinc-200 font-sans">
       <div className="max-w-4xl mx-auto w-full p-4 sm:p-6 md:p-8">
         <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 bg-zinc-900 p-4 rounded-2xl shadow-lg border border-white/5">
-          <button 
+          <Button 
             onClick={() => router.push('/')}
-            className="hover:bg-zinc-800 p-2 rounded-full transition-colors flex items-center justify-center opacity-70 hover:opacity-100"
+            variant="ghost"
+            size="icon"
             aria-label="Back"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="m15 18-6-6 6-6"/>
             </svg>
-          </button>
+          </Button>
           
           <form onSubmit={handleSearch} className="flex gap-3 w-full sm:w-auto">
             <select 
@@ -69,12 +74,11 @@ export default function LogsPage() {
             </select>
 
             <div className="relative flex-1 sm:w-48">
-              <input 
+              <Input 
                 type="text" 
                 placeholder="Search word..." 
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                className="w-full px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl outline-none focus:border-zinc-700 transition-colors text-white placeholder-zinc-500 shadow-inner font-medium text-sm tracking-wide"
               />
             </div>
           </form>
@@ -99,7 +103,7 @@ export default function LogsPage() {
                 </div>
               ) : (
                 logs.filter(g => modeFilter === 'all' || g.gameMode === modeFilter).map((game) => (
-                  <div key={game.id} className="bg-zinc-900 rounded-3xl border border-white/5 shadow-xl overflow-hidden flex flex-col">
+                  <Card key={game.id} className="p-0 overflow-hidden flex flex-col">
                     {/* Game Header */}
                     <div className="bg-zinc-900 px-6 py-4 flex flex-col sm:flex-row justify-between sm:items-center gap-3 border-b border-white/5 shadow-sm">
                       <div className="flex flex-col">
@@ -108,13 +112,9 @@ export default function LogsPage() {
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Rounds: {game.rounds.length} / {game.totalWords}</span>
-                        <div className={`px-4 py-1.5 rounded-full font-black text-xs tracking-widest uppercase shadow-inner border ${
-                          game.gameResult === 'won' ? 'bg-green-900/40 text-green-400 border-green-500/20' : 
-                          game.gameResult === 'lost' ? 'bg-red-900/40 text-red-400 border-red-500/20' : 
-                          'bg-zinc-800 text-zinc-300 border-white/5'
-                        }`}>
+                        <Badge variant={game.gameResult === 'won' ? 'success' : game.gameResult === 'lost' ? 'danger' : 'neutral'}>
                           {game.gameResult === 'won' ? 'VICTORY' : game.gameResult === 'lost' ? 'DEFEAT' : 'ABANDONED'}
-                        </div>
+                        </Badge>
                       </div>
                     </div>
 
@@ -171,7 +171,7 @@ export default function LogsPage() {
                         );
                       })}
                     </div>
-                  </div>
+                  </Card>
                 ))
               )}
         </div>
@@ -182,20 +182,20 @@ export default function LogsPage() {
             Page <span className="text-white">{page}</span> of <span className="text-white">{totalPages}</span>
           </p>
           <div className="flex gap-2">
-            <button 
+            <Button 
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1 || loading}
-              className="px-5 py-2 rounded-full bg-zinc-800 text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-zinc-700 transition-colors font-bold shadow-inner"
+              variant="secondary"
             >
               PREV
-            </button>
-            <button 
+            </Button>
+            <Button 
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
               disabled={page === totalPages || loading}
-              className="px-5 py-2 rounded-full bg-zinc-800 text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-zinc-700 transition-colors font-bold shadow-inner"
+              variant="secondary"
             >
               NEXT
-            </button>
+            </Button>
           </div>
         </div>
 
