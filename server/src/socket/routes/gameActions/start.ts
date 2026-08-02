@@ -1,5 +1,5 @@
 import type { Socket } from "socket.io";
-import { activeGameInstances } from "../core/registry.js";
+import { activeGameInstances } from "../../game/core/registry.js";
 
 /**
  * Handles the "game:start" socket event.

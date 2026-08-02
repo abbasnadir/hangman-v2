@@ -1,4 +1,4 @@
-import { supabase } from "../../app/lib/supabaseClient.js";
+import { supabase } from "../../api/lib/supabaseClient.js";
 
 export async function fetchUserActiveGameRound(userId: string) {
   const { data: gameData, error: gameError } = await supabase
@@ -178,7 +178,7 @@ export async function getWordlistWords(wordlistId: string) {
 export async function getUsedWordsInGame(gameId: string) {
   const { data, error } = await supabase.from("game_rounds").select("word").eq("game_id", gameId);
   if (error) throw new Error(error.message);
-  return new Set((data || []).map(r => r.word?.toLowerCase()));
+  return new Set<string>((data || []).map((r: any) => r.word?.toLowerCase()));
 }
 
 export async function insertNewRound(gameId: string, roundIndex: number, word: string, id?: string) {
@@ -309,9 +309,9 @@ export async function fetchProfileUpdateContext(
   }
 
   return {
-    currentProfile: data.find((profile) => profile.id === userId) ?? null,
+    currentProfile: data.find((profile: any) => profile.id === userId) ?? null,
     usernameOwner:
-      data.find((profile) => profile.username === username) ?? null,
+      data.find((profile: any) => profile.username === username) ?? null,
   };
 }
 

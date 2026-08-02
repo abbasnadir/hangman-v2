@@ -8,11 +8,11 @@ import {
   fetchGameStatus,
   getProfile
 } from "../../../shared/utils/dbQueries.js";
-import { Classic } from "../modes/Classic/index.js";
-import { Multiplayer } from "../modes/Multiplayer/index.js";
-import type { GameMode } from "../core/GameMode.js";
+import { Classic } from "../../game/modes/Classic/index.js";
+import { Multiplayer } from "../../game/modes/Multiplayer/index.js";
+import type { GameMode } from "../../game/core/GameMode.js";
 import { joinGamePayloadSchema } from "../../schemas/gameProcessSchema.js";
-import { activeGameInstances } from "../core/registry.js";
+import { activeGameInstances } from "../../game/core/registry.js";
 
 /**
  * Handles the "game:join" socket event.

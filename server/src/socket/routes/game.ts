@@ -1,5 +1,5 @@
-import type { SocketRouteObject } from "../../types/router.js";
-import { joinGamePayloadSchema, submitMovePayloadSchema } from "../../schemas/gameProcessSchema.js";
+import type { SocketRouteObject } from "../types/router.js";
+import { joinGamePayloadSchema, submitMovePayloadSchema } from "../schemas/gameProcessSchema.js";
 
 // ─── Route ───────────────────────────────────────────────────────────────────
 export const gameRoute: SocketRouteObject = {
@@ -10,8 +10,8 @@ export const gameRoute: SocketRouteObject = {
       auth: "required",
       rateLimit: "game",
       zodSchema: joinGamePayloadSchema,
-      handler: async (socket, payload) => {
-        const { joinHandler } = await import("./join.js");
+      handler: async (socket: any, payload: any) => {
+        const { joinHandler } = await import("./gameActions/join.js");
         return joinHandler(socket, payload);
       },
     },
@@ -19,8 +19,8 @@ export const gameRoute: SocketRouteObject = {
       event: "start",
       auth: "required",
       rateLimit: "game",
-      handler: async (socket) => {
-        const { startHandler } = await import("./start.js");
+      handler: async (socket: any) => {
+        const { startHandler } = await import("./gameActions/start.js");
         return startHandler(socket);
       },
     },
@@ -29,8 +29,8 @@ export const gameRoute: SocketRouteObject = {
       auth: "required",
       rateLimit: "game_move",
       zodSchema: submitMovePayloadSchema,
-      handler: async (socket, payload) => {
-        const { submitMoveHandler } = await import("./submitMove.js");
+      handler: async (socket: any, payload: any) => {
+        const { submitMoveHandler } = await import("./gameActions/submitMove.js");
         return submitMoveHandler(socket, payload);
       },
     },
@@ -38,8 +38,8 @@ export const gameRoute: SocketRouteObject = {
       event: "start_next_round",
       auth: "required",
       rateLimit: "game",
-      handler: async (socket) => {
-        const { nextRoundHandler } = await import("./nextRound.js");
+      handler: async (socket: any) => {
+        const { nextRoundHandler } = await import("./gameActions/nextRound.js");
         return nextRoundHandler(socket);
       },
     },
@@ -47,8 +47,8 @@ export const gameRoute: SocketRouteObject = {
       event: "leave",
       auth: "required",
       rateLimit: "game",
-      handler: async (socket) => {
-        const { leaveHandler } = await import("./leave.js");
+      handler: async (socket: any) => {
+        const { leaveHandler } = await import("./gameActions/leave.js");
         return leaveHandler(socket);
       }
     }

@@ -1,4 +1,4 @@
-import { onMoveSubmitted } from "../shared/helpers/onMoveSubmitted.js";
+import { onMoveSubmitted } from "../../core/onMoveSubmitted.js";
 import { onPlayerFinished } from "./actions/onPlayerFinished.js";
 import { triggerRoundTransitionIfNeeded } from "./actions/triggerRoundTransitionIfNeeded.js";
 import { handleStart } from "./actions/handleStart.js";

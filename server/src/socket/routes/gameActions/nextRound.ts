@@ -1,6 +1,6 @@
 import type { Socket } from "socket.io";
-import { activeGameInstances } from "../core/registry.js";
-import { Player } from "../core/Player.js";
+import { activeGameInstances } from "../../game/core/registry.js";
+import { Player } from "../../game/core/Player.js";
 
 /**
  * Handles the "game:start_next_round" socket event.

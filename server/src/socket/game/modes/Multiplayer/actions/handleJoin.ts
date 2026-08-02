@@ -1,10 +1,35 @@
 import type { Socket } from "socket.io";
-import { getActivePlayersCount, getRoundPlayer, markPlayerAsActive, fetchRoundInfo, getWordlistWords, getGamePlayers, getUsedWordsInGame, insertGamePlayer, insertGameRoundPlayer, deleteGamePlayer } from "../../../../../shared/utils/dbQueries.js";
+import { getActivePlayersCount, getRoundPlayer, markPlayerAsActive, fetchRoundInfo, getWordlistWords, getGamePlayers, getUsedWordsInGame, insertGamePlayer, insertGameRoundPlayer, deleteGamePlayer, getProfile, getGameRoundPlayers } from "../../../../../shared/utils/dbQueries.js";
 import { activeGameInstances } from "../../../core/registry.js";
-import type { Classic } from "../index.js";
+import type { Multiplayer } from "../index.js";
+
+async function getExistingLobbyPlayers(roundId: string, gameId: string, totalLives: number) {
+    const roundPlayers = await getGameRoundPlayers(roundId);
+
+    if (!roundPlayers || roundPlayers.length === 0) return [];
+    
+    const playerIds = roundPlayers.map((rp: any) => rp.user_id);
+    const profiles = await Promise.all(playerIds.map((id: string) => getProfile(id)));
+
+    return roundPlayers.map((rp: any) => {
+        const p = profiles.find((prof: any) => prof?.id === rp.user_id);
+        const playerState = activeGameInstances[gameId]?.players[rp.user_id];
+        
+        return {
+            userId: rp.user_id,
+            username: p?.username ?? "Player",
+            pfp: p?.pfp ?? "",
+            lives: playerState?.lives ?? totalLives,
+            completed: playerState?.completed ?? false,
+            timeTakenMs: playerState?.getTimeTaken(activeGameInstances[gameId]?.startedAt || 0) ?? 0,
+            score: 0,
+            disconnected: (playerState as any)?.disconnected ?? false,
+        };
+    });
+}
 
 export async function handleJoin(
-    this: Classic,
+    this: Multiplayer,
     socket: Socket,
     gameId: string,
     userId: string,
@@ -43,7 +68,7 @@ export async function handleJoin(
             }
             this.wordlistWords = wordlistResult.data?.words ?? [];
             this.gamePlayerIds = (gamePlayersData.data ?? []).map((gp: any) => gp.user_id);
-            this.usedWords = usedRoundWords.data ?? new Set();
+            this.usedWords = usedRoundWords.data ?? new Set<string>();
             
             const count = await getActivePlayersCount(socket.data.user.currentRoundId);
             this.totalPlayersCount = count;
@@ -87,6 +112,8 @@ export async function handleJoin(
             playersCount = this.totalPlayersCount;
         }
 
+        const existingPlayers = socket.data.user.currentRoundId ? await getExistingLobbyPlayers(socket.data.user.currentRoundId, gameId, gameStatus.total_lives) : [];
+
         socket.emit("game:join", { 
             success: true, 
             gameId, 
@@ -101,10 +128,10 @@ export async function handleJoin(
             lives,
             move_set,
             username: socket.data.user.username,
-            existingPlayers: [], // Classic doesn't need existing players
+            existingPlayers,
             totalLives: gameStatus.total_lives
         });
-        // Classic does NOT emit game:player_joined to the lobby since it's single player!
+        socket.to(gameId).emit("game:player_joined", { userId, playersCount, username: socket.data.user.username });
         return;
     }
 
@@ -137,7 +164,10 @@ export async function handleJoin(
 
     socket.join(gameId);
 
-    const playersCount = await getActivePlayersCount(roundToJoin.id);
+    const [playersCount, existingPlayers] = await Promise.all([
+        getActivePlayersCount(roundToJoin.id),
+        getExistingLobbyPlayers(roundToJoin.id, gameId, gameStatus.total_lives)
+    ]); 
 
     if (!activeGameInstances[gameId]) {
         const [roundInfo, wordlistResult, gamePlayersData, usedRoundWords] = await Promise.all([
@@ -155,16 +185,13 @@ export async function handleJoin(
         }
         this.wordlistWords = wordlistResult.data?.words ?? [];
         this.gamePlayerIds = (gamePlayersData.data ?? []).map((gp: any) => gp.user_id);
-        this.usedWords = usedRoundWords.data ?? new Set();
+        this.usedWords = usedRoundWords.data ?? new Set<string>();
         
         this.totalPlayersCount = playersCount;
         this.currentRoundId = socket.data.user.currentRoundId;
         activeGameInstances[gameId] = this;
     }
-    
-    socket.emit("game:join", { 
-        success: true, gameId, userId, reconnected: false, isHost, modeId, playersCount, 
-        username: socket.data.user.username, existingPlayers: [], totalLives: gameStatus.total_lives 
-    });
-    // Classic does NOT emit game:player_joined
+
+    socket.emit("game:join", { success: true, gameId, userId, reconnected: false, isHost, modeId, playersCount, username: socket.data.user.username, existingPlayers, totalLives: gameStatus.total_lives });
+    socket.to(gameId).emit("game:player_joined", { userId, playersCount, existingPlayers, username: socket.data.user.username });
 }

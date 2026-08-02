@@ -1,6 +1,6 @@
-import type { MoveSubmittedResult } from "../../../../types/gameCore.js";
-import type { GameMode } from "../../../core/GameMode.js";
-import type { move } from "../../../../../shared/types/GameInfo.js";
+import type { MoveSubmittedResult } from "../../types/gameCore.js";
+import type { GameMode } from "./GameMode.js";
+import type { move } from "../../../shared/types/GameInfo.js";
 
 export function onMoveSubmitted(
     this: GameMode,

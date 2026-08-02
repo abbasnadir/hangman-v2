@@ -184,7 +184,7 @@ const profileRouter: RouterObject = {
         }
 
         // Instantly force-disconnect any active websocket they have open
-        const { forceDisconnectUser } = await import("../../socket/socketServer.js");
+        const { forceDisconnectUser } = await import("../../socket/index.js");
         forceDisconnectUser(req.user.id);
 
         res.sendStatus(204);
