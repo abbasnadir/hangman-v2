@@ -54,3 +54,5 @@ export const gameRoute: SocketRouteObject = {
     }
   ],
 };
+
+export default gameRoute;
