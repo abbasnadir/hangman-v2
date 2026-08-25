@@ -162,6 +162,11 @@ export async function handleJoin(
         activeGameInstances[gameId] = this;
     }
     
+    this.totalPlayersCount = playersCount;
+    if (!this.gamePlayerIds.includes(userId)) {
+        this.gamePlayerIds.push(userId);
+    }
+
     socket.emit("game:join", { 
         success: true, gameId, userId, reconnected: false, isHost, modeId, playersCount, 
         username: socket.data.user.username, existingPlayers: [], totalLives: gameStatus.total_lives 
