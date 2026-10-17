@@ -10,19 +10,19 @@ import {
 } from "../../../shared/utils/dbQueries.js";
 import { Classic } from "../../game/modes/Classic/index.js";
 import { Multiplayer } from "../../game/modes/Multiplayer/index.js";
-import type { GameMode } from "../../game/core/GameMode.js";
+import type { CoreGameMode } from "../../game/core/CoreGameMode.js";
 import { joinGamePayloadSchema } from "../../schemas/gameProcessSchema.js";
 import { activeGameInstances } from "../../game/core/registry.js";
 
 /**
- * Handles the "game:join" socket event.
+ * Handles a user joining a game lobby.
  * 
  * Flow:
- * 1. Fetches game and round status from the database.
- * 2. Checks if the game is active and if the user is already playing elsewhere.
- * 3. Prevents duplicate tabs (multiple sockets) from the same user joining.
- * 4. Initializes the appropriate GameMode (Classic or Multiplayer) if it isn't in memory yet.
- * 5. Delegates the rest of the joining logic to the specific game mode via `handleJoin`.
+ * 1. Checks if the user is in another active game system-wide (prevents playing 2 games at once).
+ * 2. Checks if the user already has a socket connected in this game room (multi-tab prevention).
+ * 3. Checks if the player was already in the DB for this game (reconnection flow) or is new.
+ * 4. Initializes the appropriate CoreGameMode (Classic or Multiplayer) if it isn't in memory yet.
+ * 5. Calls gameMode.handleJoin to do DB inserts and emit events.
  */
 export const joinHandler = async (socket: Socket, payload: unknown) => {
     const { gameId } = payload as z.infer<typeof joinGamePayloadSchema>;

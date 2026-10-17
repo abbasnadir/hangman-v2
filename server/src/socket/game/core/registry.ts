@@ -1,4 +1,4 @@
-import type { GameMode } from "../core/GameMode.js";
+import type { CoreGameMode } from "../core/CoreGameMode.js";
 
-// Global in-memory game registry
-export const activeGameInstances: Record<string, GameMode> = {};
+// Global dictionary mapping gameId -> active CoreGameMode instance
+export const activeGameInstances: Record<string, CoreGameMode> = {};

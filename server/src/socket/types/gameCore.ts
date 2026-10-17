@@ -7,10 +7,8 @@ export interface ProcessMoveResult {
 }
 
 export interface PlayerFinishedResult {
-    playerEvent: {
-        name: "game:player_won" | "game:player_lost" | "game:player_completed" | "game:next_round";
-        payload: Record<string, unknown>;
-    };
+    playerEvent: "game:player_won" | "game:player_lost" | "game:player_completed" | "game:next_round";
+    playerPayload: Record<string, unknown>;
     broadcastPayload: Record<string, unknown>;
     winnerBroadcastPayload?: Record<string, unknown> | undefined;
     roundEnded: boolean;

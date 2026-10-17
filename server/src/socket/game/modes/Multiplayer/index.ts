@@ -1,20 +1,13 @@
-import { onMoveSubmitted } from "../../core/onMoveSubmitted.js";
-import { onPlayerFinished } from "./actions/onPlayerFinished.js";
-import { triggerRoundTransitionIfNeeded } from "./actions/triggerRoundTransitionIfNeeded.js";
-import { handleStart } from "./actions/handleStart.js";
-import { handleSubmitMove } from "./actions/handleSubmitMove.js";
-import { handleDisconnect } from "./actions/handleDisconnect.js";
-import { handleLeave } from "./actions/handleLeave.js";
-import { handleJoin } from "./actions/handleJoin.js";
-import { GameMode } from "../../core/GameMode.js";
-import type { GameInfo, move } from "../../../../shared/types/GameInfo.js";
+import { MultiplayerMode } from "../../core/MultiplayerMode.js";
 import { Player } from "../../core/Player.js";
 import type { ProcessMoveResult } from "../../../types/gameCore.js";
+import type { GameInfo, move } from "../../../../shared/types/GameInfo.js";
 
-export class Multiplayer extends GameMode {
+export class Multiplayer extends MultiplayerMode {
     winner: string | null = null;
     minTime: number = Infinity;
     scores: Record<string, number> = {};
+    private roundScoreAwarded: boolean = false;
 
     constructor(lives: number = 5) {
         super("Multiplayer", 2, 50, lives);
@@ -24,89 +17,22 @@ export class Multiplayer extends GameMode {
         return players_count >= this.min_players && players_count <= this.max_players;
     }
 
-    processMove(userId: string, move: move, _gameState: Partial<GameInfo>): ProcessMoveResult {
-        if (!this.players[userId]) {
-            this.players[userId] = new Player(userId, this.lives);
-            if (this.scores[userId] === undefined) this.scores[userId] = 0;
-        }
-
+    evaluatePlayerResult(userId: string, isSolved: boolean): "won" | "lost" | "completed" | "in_progress" {
         const player = this.players[userId];
-        const isRoundEnded = this.completedPlayersCount >= this.totalPlayersCount;
+        if (!player) return "lost";
+        const timeTaken = player.finalTime;
 
-        if (player.completed) {
-            return {
-                player,
-                processedMove: null,
-                playerResult: "in_progress", // Prevent duplicate orchestration
-                roundEnded: isRoundEnded,
-                hasNextRound: this.roundIndex < this.numberOfWords
-            };
-        }
-
-        const guess = move.guess.toLowerCase();
-
-        // Duplicate guess — silently ignore
-        if (player.move_set.includes(guess)) {
-            return {
-                player,
-                processedMove: null,
-                playerResult: "in_progress",
-                roundEnded: this.completedPlayersCount >= this.totalPlayersCount,
-                hasNextRound: this.roundIndex < this.numberOfWords
-            };
-        }
-
-        const correct = this.word.toLowerCase().includes(guess);
-        player.recordGuess(guess, correct, this.startedAt);
-
-        const processedMove = { guess, correct, timestamp: move.timestamp, move_index: player.move_index };
-
-        let justWon = false;
-        let isCorrectCompletion = false;
-
-        if (correct) {
-            const targetLetters = new Set(this.word.toLowerCase().replace(/[^a-z]/g, ""));
-            const allGuessed = [...targetLetters].every(l => player.move_set.includes(l));
-            if (allGuessed) {
-                player.finish(this.startedAt);
-                this.completedPlayersCount++;
-                isCorrectCompletion = true;
-                
-                const timeTaken = player.getTimeTaken(this.startedAt);
-                if (timeTaken < this.minTime) {
-                    this.minTime = timeTaken;
-                    this.winner = userId;
-                }
+        if (isSolved && timeTaken < this.minTime) {
+            this.minTime = timeTaken;
+            this.winner = userId;
+            if (!this.roundScoreAwarded) {
+                this.scores[userId] = (this.scores[userId] || 0) + 1;
+                this.roundScoreAwarded = true;
             }
-        } else if (player.lives === 0) {
-            player.finish(this.startedAt);
-            this.completedPlayersCount++;
+            return "won";
+        } else {
+            return player.lives > 0 ? "completed" : "lost";
         }
-
-        let playerResult: ProcessMoveResult["playerResult"] = "in_progress";
-        if (player.completed) {
-            if (userId === this.winner) {
-                playerResult = "won";
-            } else if (player.lives === 0) {
-                playerResult = "lost";
-            } else {
-                playerResult = "completed";
-            }
-            
-            // Award score immediately to the winner once they finish
-            if (userId === this.winner && !(this as any).roundScoreAwarded) {
-                this.scores[this.winner] = (this.scores[this.winner] || 0) + 1;
-                (this as any).roundScoreAwarded = true;
-            }
-        }
-
-        return {
-            player,
-            processedMove,
-            playerResult,
-            roundEnded: this.completedPlayersCount >= this.totalPlayersCount,
-            hasNextRound: this.roundIndex < this.numberOfWords
-        };
     }
 
     resetRound(word: string): void {
@@ -115,25 +41,55 @@ export class Multiplayer extends GameMode {
         this.minTime = Infinity;
         this.players = {};
         this.completedPlayersCount = 0;
-        (this as any).roundScoreAwarded = false;
+        this.roundScoreAwarded = false;
     }
 
     getFinalResult(userId: string): string {
-        const maxScore = Math.max(0, ...Object.values(this.scores));
-        const winners = Object.keys(this.scores).filter(id => this.scores[id] === maxScore && maxScore > 0);
-        if (winners.includes(userId)) return "won";
         const p = this.players[userId];
-        if (p && p.completed && p.lives > 0) return "completed";
+        let maxScore = -1;
+        for (const pid of this.gamePlayerIds) {
+            const s = this.scores[pid] || 0;
+            if (s > maxScore) maxScore = s;
+        }
+        
+        if (p?.lives === 0) return "lost";
+        if (this.scores[userId] === maxScore && maxScore > 0) return "won";
+        if (p?.completed && p.lives > 0) return "completed";
         return "lost";
     }
 
-    handleStart = handleStart;
-    handleSubmitMove = handleSubmitMove;
-    handleDisconnect = handleDisconnect;
-    handleLeave = handleLeave;
-    handleJoin = handleJoin;
+    // ── Forced Multiplayer Hooks ──
 
-    onMoveSubmitted = onMoveSubmitted;
-    onPlayerFinished = onPlayerFinished;
-    triggerRoundTransitionIfNeeded = triggerRoundTransitionIfNeeded;
+    getPlayerScore(userId: string): number {
+        return this.scores[userId] || 0;
+    }
+
+    getScoresSnapshot(): Record<string, number> {
+        return { ...this.scores };
+    }
+
+    buildWinnerPayload(): { userId: string; username: string; pfp: string; score: number } | null {
+        if (!this.winner) return null;
+        return {
+            userId: this.winner,
+            username: this.playerProfiles[this.winner]?.username || "Unknown",
+            pfp: this.playerProfiles[this.winner]?.pfp || "",
+            score: this.scores[this.winner] || 0,
+        };
+    }
+
+    buildLeaderboard(
+        gamePlayerIds: string[],
+        players: Record<string, Player>,
+        playerProfiles: Record<string, { username: string; pfp: string }>
+    ) {
+        return gamePlayerIds.map(pid => ({
+            userId: pid,
+            username: playerProfiles[pid]?.username || "Unknown",
+            pfp: playerProfiles[pid]?.pfp || "",
+            score: this.scores[pid] || 0,
+            totalTimeMs: players[pid]?.finalTime || 0,
+            result: this.getFinalResult(pid),
+        })).sort((a, b) => b.score - a.score || a.totalTimeMs - b.totalTimeMs);
+    }
 }
