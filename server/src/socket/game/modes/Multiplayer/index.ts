@@ -1,7 +1,5 @@
 import { MultiplayerMode } from "../../core/MultiplayerMode.js";
-import { Player } from "../../core/Player.js";
-import type { ProcessMoveResult } from "../../../types/gameCore.js";
-import type { GameInfo, move } from "../../../../shared/types/GameInfo.js";
+import type { Player } from "../../core/Player.js";
 
 export class Multiplayer extends MultiplayerMode {
     winner: string | null = null;
@@ -23,12 +21,16 @@ export class Multiplayer extends MultiplayerMode {
         const timeTaken = player.finalTime;
 
         if (isSolved && timeTaken < this.minTime) {
+            // Each player's clock starts when they begin the round, so a later finisher can
+            // still have the best time. Move the round point to them instead of keeping it
+            // with whoever happened to finish first.
+            if (this.roundScoreAwarded && this.winner && this.winner !== userId) {
+                this.scores[this.winner] = Math.max(0, (this.scores[this.winner] || 0) - 1);
+            }
             this.minTime = timeTaken;
             this.winner = userId;
-            if (!this.roundScoreAwarded) {
-                this.scores[userId] = (this.scores[userId] || 0) + 1;
-                this.roundScoreAwarded = true;
-            }
+            this.scores[userId] = (this.scores[userId] || 0) + 1;
+            this.roundScoreAwarded = true;
             return "won";
         } else {
             return player.lives > 0 ? "completed" : "lost";
@@ -52,8 +54,9 @@ export class Multiplayer extends MultiplayerMode {
             if (s > maxScore) maxScore = s;
         }
         
-        if (p?.lives === 0) return "lost";
+        // Rounds won decide the game; `p` only reflects the final round.
         if (this.scores[userId] === maxScore && maxScore > 0) return "won";
+        if ((this.scores[userId] || 0) > 0) return "completed";
         if (p?.completed && p.lives > 0) return "completed";
         return "lost";
     }

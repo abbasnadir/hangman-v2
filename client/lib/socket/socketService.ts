@@ -37,7 +37,12 @@ class SocketService {
           console.log(`[SocketService] Connecting to ${SOCKET_URL} ...`);
           this.socket = io(SOCKET_URL, {
             transports: ['websocket'],
-            auth: { token }
+            // Evaluated on every (re)connect so reconnections use a fresh access token.
+            auth: (cb) => {
+              supabase.auth.getSession()
+                .then(({ data }) => cb({ token: data.session?.access_token || token }))
+                .catch(() => cb({ token }));
+            }
           });
 
           this.socket.on('connect', () => {

@@ -3,10 +3,7 @@ import type { authorization } from "../types/router.js";
 import type { NextFunction, Request, Response, RequestHandler } from "express";
 
 // Module imports
-import {
-  UnauthorizedError,
-  NotFoundError,
-} from "../../shared/errors/httpErrors.js";
+import { UnauthorizedError } from "../../shared/errors/httpErrors.js";
 import verifyJwt from "../../shared/lib/verifyJwt.js";
 import { fetchUserWithId } from "../../shared/utils/dbQueries.js";
 
@@ -34,16 +31,13 @@ export function authHandler(authType: authorization): RequestHandler {
           throw new UnauthorizedError("Guest accounts are not permitted to perform this action.");
         }
 
-        // Check if user exists and is not deleted in the database for required auth routes
-        fetchUserWithId(req.user.id)
-          .then((user) => {
-            if (!user) {
-              throw new NotFoundError("User not found or deleted");
-            }
-          })
-          .catch((err) => {
-            throw err instanceof Error ? err : new Error("Database error");
-          });
+        // Check if user exists and is not deleted in the database for required auth routes.
+        // This must be awaited: otherwise the check never blocks the request and a throw
+        // inside the promise chain becomes an unhandled rejection that kills the process.
+        const user = await fetchUserWithId(req.user.id);
+        if (!user) {
+          throw new UnauthorizedError("User not found or deleted");
+        }
 
         // Optional Auth, Try auth but ignore if not present
       } else if (authType === "optional") {

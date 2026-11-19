@@ -11,13 +11,12 @@ export interface ClassicGameProps {
 
 const TOTAL_LIVES = 5;
 
-export const ClassicGame: React.FC<ClassicGameProps> = ({ gameId, initialData, gameSocket }) => {
+export const ClassicGame: React.FC<ClassicGameProps> = ({ initialData, gameSocket }) => {
     const router = useRouter();
-    const { submitMove, forfeitGame, startNextRound, useListener, socketService } = gameSocket;
+    const { submitMove, forfeitGame, startNextRound, useListener } = gameSocket;
 
-    const [status, setStatus] = useState<'playing' | 'round_transition' | 'ended'>(
-        initialData.reconnected && initialData.started ? 'playing' : 'playing' // single player starts immediately or is playing
-    );
+    // Single player starts immediately (auto-start) or is already playing (reconnect).
+    const [status, setStatus] = useState<'playing' | 'round_transition' | 'ended'>('playing');
     const [gameResult, setGameResult] = useState<'won' | 'lost' | 'abandoned' | 'completed' | null>(null);
     const [word, setWord] = useState('');
     const [lives, setLives] = useState(initialData.lives ?? TOTAL_LIVES);
@@ -98,16 +97,19 @@ export const ClassicGame: React.FC<ClassicGameProps> = ({ gameId, initialData, g
     });
 
     useListener('game:fully_completed', (data: any) => {
-        if (data && data.result) {
-            setGameResult(data.result);
-            setStatus('ended');
-        }
+        if (!data) return;
+        // data.result is just "game_ended"; the overall outcome is in the leaderboard entry.
+        const mine = Array.isArray(data.leaderboard)
+            ? data.leaderboard.find((p: any) => p.userId === initialData.userId)
+            : null;
+        if (mine?.result) setGameResult(mine.result);
+        setStatus('ended');
     });
 
     useListener('game:started_round', (data: any) => {
-        if (data.success && data.startTime) {
-            setGameStartTime(data.startTime);
-        }
+        if (!data.success) return;
+        if (data.startTime) setGameStartTime(data.startTime);
+        if (typeof data.lives === 'number') setLives(data.lives);
     });
 
     const handleNextRound = () => {
@@ -117,7 +119,7 @@ export const ClassicGame: React.FC<ClassicGameProps> = ({ gameId, initialData, g
         setGameResult(null);
         setWord('');
         setMaskedWord(nextRoundData.maskedWord || []);
-        setLives(nextRoundData.lives ?? TOTAL_LIVES);
+        setLives(nextRoundData.lives ?? totalLivesState);
         setPressedKeys(new Set());
         setDisplayTime("0.00s");
         setNextRoundData(null);

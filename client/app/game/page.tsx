@@ -5,6 +5,8 @@ import { useState, useEffect, Suspense } from 'react';
 import { useGameSocket } from '@/hooks/useGameSocket';
 import { ClassicGame } from './modes/ClassicGame';
 import { MultiplayerGame } from './modes/MultiplayerGame';
+import { CountdownGame } from './modes/CountdownGame';
+import { GAME_MODES, isSinglePlayerMode } from '@/lib/gameModes';
 
 function HangmanGameClient() {
     const searchParams = useSearchParams();
@@ -34,7 +36,7 @@ function HangmanGameClient() {
             setInitialData(data);
 
             // Auto-start only for single player if not reconnected/started
-            if (parsedModeId === 1 && !data.started) {
+            if (isSinglePlayerMode(parsedModeId) && !data.started) {
                 startGame();
             }
         } else {
@@ -64,11 +66,15 @@ function HangmanGameClient() {
         );
     }
 
-    if (modeId === 1) {
+    if (modeId === GAME_MODES.CLASSIC) {
         return <ClassicGame gameId={gameId!} initialData={initialData} gameSocket={gameSocket} />;
     }
 
-    if (modeId === 2) {
+    if (modeId === GAME_MODES.COUNTDOWN) {
+        return <CountdownGame gameId={gameId!} initialData={initialData} gameSocket={gameSocket} />;
+    }
+
+    if (modeId === GAME_MODES.MULTIPLAYER) {
         return <MultiplayerGame gameId={gameId!} initialData={initialData} gameSocket={gameSocket} />;
     }
 

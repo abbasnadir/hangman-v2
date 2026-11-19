@@ -4,7 +4,8 @@ import { createServer } from "node:http";
 import { createSocketServer } from "./socket/index.js";
 
 const httpServer = createServer(app);
-createSocketServer(httpServer);
+// Socket routes are loaded asynchronously; don't accept connections until they're registered.
+await createSocketServer(httpServer);
 
 const PORT = Number(process.env.PORT) || 5000;
 

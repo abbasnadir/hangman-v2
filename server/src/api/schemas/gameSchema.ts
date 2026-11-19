@@ -4,7 +4,7 @@ export const lives = z.coerce
   .number("Total lives must be a number.")
   .int("Invalid option for total lives.")
   .max(30, "Cannot have more than 30 lives.")
-  .min(0, "You must have at least 0 life")
+  .min(1, "You must have at least 1 life")
   .optional()
   .default(5);
 

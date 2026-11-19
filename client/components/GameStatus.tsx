@@ -10,6 +10,7 @@ interface GameStatusProps {
   result: GameResult;
   word: string;
   time: string;
+  timeLabel?: string;
   onMenu: () => void;
   nextRound?: boolean;
   nextRoundReady?: boolean;
@@ -20,6 +21,7 @@ export const GameStatus = ({
   result,
   word,
   time,
+  timeLabel = 'Time Taken',
   onMenu,
   nextRound = false,
   nextRoundReady = true,
@@ -117,7 +119,7 @@ export const GameStatus = ({
           
           <div className="flex items-center gap-2 bg-black/50 px-4 py-2 rounded-xl text-zinc-300 font-mono text-sm border border-white/5">
             <Clock className="w-4 h-4" />
-            <span>Time Taken: {time}</span>
+            <span>{timeLabel}: {time}</span>
           </div>
         </div>
 

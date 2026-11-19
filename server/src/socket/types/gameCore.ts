@@ -6,27 +6,40 @@ export interface ProcessMoveResult {
     hasNextRound: boolean;
 }
 
+export interface NextRoundData {
+    id: string;
+    maskedWord: string[];
+    startTime: number;
+    lives: number;
+    gamePlayerIds: string[];
+}
+
+export interface LeaderboardEntry {
+    userId: string;
+    username: string;
+    pfp: string;
+    score: number;
+    totalTimeMs: number;
+}
+
+export interface RoundTransitionResult {
+    winnerBroadcastPayload?: Record<string, unknown> | null | undefined;
+    nextRoundPromise?: Promise<NextRoundData | null> | undefined;
+    gameFullyEnded?: boolean | undefined;
+    gameFullyEndedPromise?: Promise<any> | undefined;
+    leaderboard?: LeaderboardEntry[] | undefined;
+}
+
 export interface PlayerFinishedResult {
     playerEvent: "game:player_won" | "game:player_lost" | "game:player_completed" | "game:next_round";
     playerPayload: Record<string, unknown>;
     broadcastPayload: Record<string, unknown>;
-    winnerBroadcastPayload?: Record<string, unknown> | undefined;
+    winnerBroadcastPayload?: Record<string, unknown> | null | undefined;
     roundEnded: boolean;
-    nextRoundPromise?: Promise<{
-        id: string;
-        maskedWord: string[];
-        startTime: number;
-        gamePlayerIds: string[];
-    } | null>;
+    nextRoundPromise?: Promise<NextRoundData | null> | undefined;
     gameFullyEnded: boolean;
-    gameFullyEndedPromise?: Promise<any>;
-    leaderboard?: Array<{
-        userId: string;
-        username: string;
-        pfp: string;
-        score: number;
-        totalTimeMs: number;
-    }>;
+    gameFullyEndedPromise?: Promise<any> | undefined;
+    leaderboard?: LeaderboardEntry[] | undefined;
 }
 
 export interface MoveSubmittedResult {
@@ -36,4 +49,11 @@ export interface MoveSubmittedResult {
 
 export interface PlayerLeaveResult {
     gameAbandoned: boolean;
+}
+
+/** Sent to clients of timed modes so they can render the countdown. */
+export interface TimerPayload {
+    timeLimitMs: number;
+    remainingMs: number;
+    penaltyMs: number;
 }

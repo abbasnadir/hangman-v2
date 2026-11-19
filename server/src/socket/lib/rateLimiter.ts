@@ -7,9 +7,7 @@ import type {
   SocketMiddleware,
   Tpayload,
 } from "../types/socketHandler.js";
-import {
-  UnauthorizedError,
-} from "../../shared/errors/httpErrors.js";
+import { AppError } from "../../shared/errors/AppError.js";
 
 const limiters: Record<string, RateLimiterMemory> = {
   strict: new RateLimiterMemory({ points: 5, duration: 60 }),
@@ -23,16 +21,20 @@ export function rateLimiter(rateLimit: rateLimit): SocketMiddleware {
     const limiter = limiters[rateLimit];
     if (!limiter) return next();
 
+    // Key by user (falling back to IP) so reconnecting doesn't reset the limits.
+    const key = socket.data.user?.id ?? socket.handshake.address;
     try {
-      await limiter.consume(socket.id);
+      await limiter.consume(`${rateLimit}:${key}`);
       next();
     } catch (err) {
       console.warn(
-        `Rate limit exceeded for socket ${socket.id} on event with rate limit "${rateLimit}"`,
+        `Rate limit exceeded for ${key} (socket ${socket.id}) on event with rate limit "${rateLimit}"`,
       );
       next(
-        new UnauthorizedError(
+        new AppError(
           `Rate limit exceeded. Please wait before sending more requests.`,
+          429,
+          "RATE_LIMITED",
         ),
       );
     }

@@ -4,7 +4,9 @@ import { supabase } from "@/lib/supabaseClient";
 import { useEffect, useState } from "react";
 import { useRouter } from 'next/navigation';
 import Card from "@/components/Card";
-import { Gamepad2, Swords, History, LogIn, X, Play, LogOut, RefreshCw } from "lucide-react";
+import { Gamepad2, Swords, History, LogIn, X, Play, LogOut, RefreshCw, Hourglass } from "lucide-react";
+import { socketService } from "@/lib/socket/socketService";
+import { GAME_MODES } from "@/lib/gameModes";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { GameAPI } from "@/lib/api/game";
@@ -237,6 +239,19 @@ export default function Home() {
               )}
             </Card>
             
+            <Card onClick={() => handleOpenGameMenu(GAME_MODES.COUNTDOWN)} delay={0.15} className="flex items-center gap-4 bg-amber-500 hover:bg-amber-400 border-amber-300/30">
+              {loadingMode === GAME_MODES.COUNTDOWN ? (
+                <div className="text-center w-full font-black text-white tracking-widest uppercase">Loading...</div>
+              ) : (
+                <>
+                  <div className="bg-white/20 p-3 rounded-2xl">
+                    <Hourglass className="w-6 h-6 text-white" />
+                  </div>
+                  <span className="text-xl font-black text-white tracking-widest uppercase">Countdown</span>
+                </>
+              )}
+            </Card>
+
             <Card onClick={() => handleOpenGameMenu(2)} delay={0.2} className="flex items-center gap-4 bg-emerald-600 hover:bg-emerald-500 border-emerald-400/30">
               {loadingMode === 2 ? (
                 <div className="text-center w-full font-black text-white tracking-widest uppercase">Loading...</div>
@@ -266,7 +281,7 @@ export default function Home() {
                 <Swords className="w-5 h-5" /> Wordlists
               </Button>
               <Button 
-                onClick={async () => { await supabase.auth.signOut(); }}
+                onClick={async () => { await supabase.auth.signOut(); socketService.disconnect(); }}
                 variant="danger"
                 className="rounded-full flex items-center gap-2"
               >
@@ -277,8 +292,13 @@ export default function Home() {
         ) : (
           <div className="bg-[#251A3D] p-6 sm:p-8 rounded-3xl border-t border-white/10 w-full flex flex-col gap-5 shadow-2xl">
             <h2 className="text-2xl text-white font-black font-fredoka tracking-wider mb-2">
-              {selectedGamemode === 1 ? 'SINGLEPLAYER SETUP' : 'MULTIPLAYER SETUP'}
+              {selectedGamemode === GAME_MODES.CLASSIC ? 'SINGLEPLAYER SETUP' : selectedGamemode === GAME_MODES.COUNTDOWN ? 'COUNTDOWN SETUP' : 'MULTIPLAYER SETUP'}
             </h2>
+            {selectedGamemode === GAME_MODES.COUNTDOWN && (
+              <p className="text-zinc-400 text-sm font-semibold -mt-3">
+                No lives, just a clock. Every word starts at 60 seconds and each wrong guess burns 6 seconds. Solve it before the clock hits zero!
+              </p>
+            )}
             
             <div className="flex flex-col gap-2">
               <div className="flex justify-between items-center px-1">

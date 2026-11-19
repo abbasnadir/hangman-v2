@@ -113,7 +113,7 @@ const logsRouter: RouterObject = {
 
           return {
             id: game.id,
-            gameMode: game.mode_id === 1 ? "Single Player" : "Multiplayer",
+            gameMode: game.mode_id === 1 ? "Single Player" : game.mode_id === 3 ? "Countdown" : "Multiplayer",
             gameResult: gamePlayerInfo.result,
             totalLives: game.total_lives,
             totalWords: game.number_of_words,

@@ -129,6 +129,10 @@ const relationsRouter: RouterObject = {
           );
         }
 
+        if (!(await fetchUserWithId(id))) {
+          throw new NotFoundError("User not found.");
+        }
+
         const { data: relation, error: relationError } = await supabase
           .from("relationships")
           .select("*")
@@ -238,6 +242,8 @@ const relationsRouter: RouterObject = {
             .update({
               status: "rejected",
               accepted_at: null,
+              // The resend cooldown is measured from requested_at, so restart it at rejection time.
+              requested_at: new Date().toISOString(),
             })
             .eq("id", relation.id)
             .select("*")
@@ -248,6 +254,10 @@ const relationsRouter: RouterObject = {
           }
           res.status(200).json(data);
           return;
+        }
+        // Deleting a rejected request would let the requester skip the resend cooldown.
+        if (relation.status === "rejected" && relation.requester_id === req.user.id) {
+          throw new BadRequestError("You cannot remove a rejected request.");
         }
         const { error: fetchError } = await supabase
           .from("relationships")

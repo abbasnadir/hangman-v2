@@ -32,7 +32,12 @@ export function authHandler(authType: authorization): SocketMiddleware {
     }
 
     try {
-      await authenticateSocket(socket);
+      // The handshake token is verified when the socket connects and never changes for the
+      // life of the connection, so re-verifying it on every event would start rejecting
+      // everything once the (short-lived) access token expires mid-game.
+      if (!socket.data.user?.id) {
+        await authenticateSocket(socket);
+      }
       
       if (authType === "non-guest" && socket.data.user?.is_anonymous) {
         return next(new UnauthorizedError("Guest accounts are not permitted to perform this action."));

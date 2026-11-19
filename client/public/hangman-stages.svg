@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hangman stages: the 10 steps of the classic hangman drawing, one per lost life
+  (or per slice of time in Countdown mode). Base, pole, beam, rope, head, body,
+  arms and legs are drawn in turn; on the last step the figure dies and swings.
+  Same geometry as client/components/HangmanFigure.tsx. Pure SVG/SMIL, loops forever.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 190 220" width="380" height="440" role="img" aria-label="Animated hangman drawing">
+  <rect width="190" height="220" rx="16" fill="#171124"/>
+  <g fill="none" stroke="#FFFFFF" stroke-opacity="0.07" stroke-width="5" stroke-linecap="round" stroke-dasharray="2 9">
+    <path d="M 18 206 H 122"/>
+    <path d="M 48 206 V 18"/>
+    <path d="M 48 18 H 142"/>
+    <path d="M 48 54 L 84 18"/>
+    <path d="M 142 18 V 44"/>
+    <circle cx="142" cy="61" r="17"/>
+    <path d="M 142 78 V 134"/>
+    <path d="M 142 94 L 117 119"/>
+    <path d="M 142 94 L 167 119"/>
+    <path d="M 142 134 L 120 170"/>
+    <path d="M 142 134 L 164 170"/>
+  </g>
+  <g fill="none" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <path stroke="#A78BFA" d="M 18 206 H 122" pathLength="1" stroke-dasharray="1 2" stroke-dashoffset="1"><animate attributeName="stroke-dashoffset" dur="11s" repeatCount="indefinite" calcMode="linear"
+        keyTimes="0;0.0000;0.0409;0.9455;1" values="1;1;0;0;1"/></path>
+    <path stroke="#A78BFA" d="M 48 206 V 18" pathLength="1" stroke-dasharray="1 2" stroke-dashoffset="1"><animate attributeName="stroke-dashoffset" dur="11s" repeatCount="indefinite" calcMode="linear"
+        keyTimes="0;0.0727;0.1136;0.9455;1" values="1;1;0;0;1"/></path>
+    <path stroke="#A78BFA" d="M 48 18 H 142" pathLength="1" stroke-dasharray="1 2" stroke-dashoffset="1"><animate attributeName="stroke-dashoffset" dur="11s" repeatCount="indefinite" calcMode="linear"
+        keyTimes="0;0.1455;0.1864;0.9455;1" values="1;1;0;0;1"/></path>
+      <path stroke="#A78BFA" d="M 48 54 L 84 18" pathLength="1" stroke-dasharray="1 2" stroke-dashoffset="1"><animate attributeName="stroke-dashoffset" dur="11s" repeatCount="indefinite" calcMode="linear"
+        keyTimes="0;0.1455;0.1864;0.9455;1" values="1;1;0;0;1"/></path>
+    <g>
+      <animateTransform attributeName="transform" type="rotate" dur="11s" repeatCount="indefinite"
+        keyTimes="0;0.6955;0.7591;0.8227;0.8864;0.9455;1"
+        values="0 142 18;0 142 18;5 142 18;-5 142 18;4 142 18;0 142 18;0 142 18"/>
+      <path stroke="#A78BFA" d="M 142 18 V 44" pathLength="1" stroke-dasharray="1 2" stroke-dashoffset="1"><animate attributeName="stroke-dashoffset" dur="11s" repeatCount="indefinite" calcMode="linear"
+        keyTimes="0;0.2182;0.2591;0.9455;1" values="1;1;0;0;1"/></path>
+      <circle stroke="#F4F4F5" cx="142" cy="61" r="17" pathLength="1" stroke-dasharray="1 2" stroke-dashoffset="1"><animate attributeName="stroke-dashoffset" dur="11s" repeatCount="indefinite" calcMode="linear"
+        keyTimes="0;0.2909;0.3318;0.9455;1" values="1;1;0;0;1"/></circle>
+      <path stroke="#F4F4F5" d="M 142 78 V 134" pathLength="1" stroke-dasharray="1 2" stroke-dashoffset="1"><animate attributeName="stroke-dashoffset" dur="11s" repeatCount="indefinite" calcMode="linear"
+        keyTimes="0;0.3636;0.4045;0.9455;1" values="1;1;0;0;1"/></path>
+      <path stroke="#F4F4F5" d="M 142 94 L 117 119" pathLength="1" stroke-dasharray="1 2" stroke-dashoffset="1"><animate attributeName="stroke-dashoffset" dur="11s" repeatCount="indefinite" calcMode="linear"
+        keyTimes="0;0.4364;0.4773;0.9455;1" values="1;1;0;0;1"/></path>
+      <path stroke="#F4F4F5" d="M 142 94 L 167 119" pathLength="1" stroke-dasharray="1 2" stroke-dashoffset="1"><animate attributeName="stroke-dashoffset" dur="11s" repeatCount="indefinite" calcMode="linear"
+        keyTimes="0;0.5091;0.5500;0.9455;1" values="1;1;0;0;1"/></path>
+      <path stroke="#F4F4F5" d="M 142 134 L 120 170" pathLength="1" stroke-dasharray="1 2" stroke-dashoffset="1"><animate attributeName="stroke-dashoffset" dur="11s" repeatCount="indefinite" calcMode="linear"
+        keyTimes="0;0.5818;0.6227;0.9455;1" values="1;1;0;0;1"/></path>
+      <path stroke="#F4F4F5" d="M 142 134 L 164 170" pathLength="1" stroke-dasharray="1 2" stroke-dashoffset="1"><animate attributeName="stroke-dashoffset" dur="11s" repeatCount="indefinite" calcMode="linear"
+        keyTimes="0;0.6545;0.6955;0.9455;1" values="1;1;0;0;1"/></path>
+      <g stroke="#F43F5E" opacity="0">
+        <animate attributeName="opacity" dur="11s" repeatCount="indefinite" keyTimes="0;0.6955;0.6964;0.9455;1" values="0;0;1;1;0"/>
+        <circle cx="142" cy="61" r="17"/>
+        <path d="M 142 78 V 134 M 142 94 L 117 119 M 142 94 L 167 119 M 142 134 L 120 170 M 142 134 L 164 170"/>
+        <g stroke-width="2.5"><path d="M 133 54 L 139 60 M 139 54 L 133 60 M 145 54 L 151 60 M 151 54 L 145 60 M 135 71 Q 142 65 149 71"/></g>
+      </g>
+      <g stroke="#F4F4F5" stroke-width="2.5" opacity="0">
+        <animate attributeName="opacity" dur="11s" repeatCount="indefinite" keyTimes="0;0.3318;0.3327;0.6955;0.6964;1" values="0;0;1;1;0;0"/>
+        <circle cx="136" cy="57" r="1.2" fill="#F4F4F5"/>
+        <circle cx="148" cy="57" r="1.2" fill="#F4F4F5"/>
+        <path d="M 136 69 H 148"/>
+      </g>
+    </g>
+  </g>
+</svg>

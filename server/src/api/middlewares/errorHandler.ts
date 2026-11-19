@@ -22,6 +22,18 @@ export const errorHandler: ErrorRequestHandler = (
 
   // Unknown / untrusted error
   if (!(err instanceof AppError)) {
+    // Errors raised by middleware before the route runs (malformed JSON, payload too
+    // large, ...) carry their own 4xx status and are the client's fault, not a 500.
+    const status = (err as any)?.status ?? (err as any)?.statusCode;
+    if (typeof status === "number" && status >= 400 && status < 500) {
+      return res.status(status).json({
+        error: {
+          code: "BAD_REQUEST",
+          message: (err as any)?.expose ? (err as Error).message : "Bad request",
+        },
+      });
+    }
+
     console.error("Unhandled Error:", err);
 
     return res.status(500).json({

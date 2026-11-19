@@ -1,5 +1,4 @@
 import type { Socket } from "socket.io";
-import { z } from "zod";
 import crypto from "crypto";
 import { submitMovePayloadSchema } from "../../schemas/gameProcessSchema.js";
 import * as db from "../../../shared/utils/dbQueries.js";
@@ -11,7 +10,8 @@ import type {
     ProcessMoveResult,
     PlayerFinishedResult,
     MoveSubmittedResult,
-    PlayerLeaveResult
+    RoundTransitionResult,
+    TimerPayload
 } from "../../types/gameCore.js";
 
 export interface GameInitConfig {
@@ -37,6 +37,7 @@ export abstract class CoreGameMode {
     public totalPlayersCount: number = 0;
     public currentRoundId: string = "";
     protected _transitioning: boolean = false;
+    protected _gameEnded: boolean = false;
     public playerProfiles: Record<string, { username: string; pfp: string }> = {};
     public wordlistWords: string[] = [];
     public usedWords: Set<string> = new Set();
@@ -59,24 +60,41 @@ export abstract class CoreGameMode {
     abstract resetRound(word: string): void;
     abstract getFinalResult(userId: string): string;
 
-    public processMove(userId: string, move: move, _gameState: Partial<GameInfo>): ProcessMoveResult {
+    public ensurePlayer(userId: string): Player {
         if (!this.players[userId]) {
             this.players[userId] = new Player(userId, this.lives);
             if ('scores' in this && (this as any).scores[userId] === undefined) {
                 (this as any).scores[userId] = 0;
             }
         }
+        return this.players[userId];
+    }
 
-        const player = this.players[userId];
-        const isRoundEnded = this.completedPlayersCount >= this.totalPlayersCount;
+    public processMove(userId: string, move: move, _gameState: Partial<GameInfo>): ProcessMoveResult {
+        const player = this.ensurePlayer(userId);
+        const hasNextRound = this.roundIndex < this.numberOfWords;
 
         if (player.completed) {
             return {
                 player,
                 processedMove: null,
                 playerResult: "in_progress",
-                roundEnded: isRoundEnded,
-                hasNextRound: this.roundIndex < this.numberOfWords
+                roundEnded: this.completedPlayersCount >= this.totalPlayersCount,
+                hasNextRound
+            };
+        }
+
+        // A player can fail without guessing (e.g. their clock ran out). Never accept a
+        // guess after that point, otherwise a late correct guess could still win the round.
+        if (this.hasPlayerFailed(player)) {
+            player.finish(this.startedAt);
+            this.completedPlayersCount++;
+            return {
+                player,
+                processedMove: null,
+                playerResult: this.evaluatePlayerResult(userId, false),
+                roundEnded: this.completedPlayersCount >= this.totalPlayersCount,
+                hasNextRound
             };
         }
 
@@ -87,37 +105,36 @@ export abstract class CoreGameMode {
                 player,
                 processedMove: null,
                 playerResult: "in_progress",
-                roundEnded: isRoundEnded,
-                hasNextRound: this.roundIndex < this.numberOfWords
+                roundEnded: this.completedPlayersCount >= this.totalPlayersCount,
+                hasNextRound
             };
         }
 
-        const isLibMatch = this.word.includes(guess);
-        player.recordGuess(guess, isLibMatch, this.startedAt);
+        const isCorrect = this.word.toLowerCase().includes(guess);
+        player.recordGuess(guess, isCorrect, this.startedAt, this.wrongGuessCostsLife());
 
-        const currentMasked = this.getMaskedWord(userId).join("");
-        const isSolved = !currentMasked.includes("_");
+        const isSolved = !this.getMaskedWord(userId).includes("_");
 
         let playerResult: "won" | "lost" | "in_progress" | "completed" = "in_progress";
 
-        if (isSolved || player.lives <= 0) {
+        if (isSolved || player.completed || this.hasPlayerFailed(player)) {
             player.finish(this.startedAt);
             this.completedPlayersCount++;
             playerResult = this.evaluatePlayerResult(userId, isSolved);
         }
 
-        const processedMove = { guess, correct: isLibMatch, timestamp: move.timestamp, move_index: player.move_index };
+        const processedMove = { guess, correct: isCorrect, timestamp: move.timestamp, move_index: player.move_index };
 
         return {
             player,
             processedMove,
             playerResult,
             roundEnded: this.completedPlayersCount >= this.totalPlayersCount,
-            hasNextRound: this.roundIndex < this.numberOfWords
+            hasNextRound
         };
     }
 
-    // ── Virtual Hooks (Overridden by SinglePlayerMode / MultiplayerMode) ───
+    // ── Virtual Hooks (Overridden by SinglePlayerMode / MultiplayerMode / modes) ──
 
     getPlayerScore(userId: string): number { return 0; }
     getScoresSnapshot(): Record<string, number> { return {}; }
@@ -133,6 +150,26 @@ export abstract class CoreGameMode {
             totalTimeMs: players[pid]?.finalTime || 0,
             result: this.getFinalResult(pid),
         })).sort((a, b) => (players[a.userId]?.finalTime || 0) - (players[b.userId]?.finalTime || 0));
+    }
+
+    /** Whether a wrong guess removes a life. Timed modes penalise with time instead. */
+    protected wrongGuessCostsLife(): boolean { return true; }
+
+    /** Whether the player has lost the round without solving the word. */
+    protected hasPlayerFailed(player: Player): boolean { return player.lives <= 0; }
+
+    /** Extra timer information sent to clients of timed modes. */
+    public getTimerPayload(_userId: string): TimerPayload | {} { return {}; }
+
+    /** Called whenever a player's round clock (re)starts: game start, next round, or rejoin. */
+    protected onPlayerRoundActive(_socket: Socket, _userId: string): void {}
+
+    /** Release timers and other resources held by this game instance. */
+    public dispose(): void {
+        if (this.abandonTimer) {
+            clearTimeout(this.abandonTimer);
+            delete this.abandonTimer;
+        }
     }
 
     // ── Base Logic ──────────────────────────────────────────────────────────
@@ -172,7 +209,33 @@ export abstract class CoreGameMode {
 
     public getMaskedWord(userId: string | undefined): string[] {
         const guessedLetters = userId && this.players[userId] ? this.players[userId].move_set : [];
-        return this.word.split("").map(char => (char === " " ? " " : guessedLetters.includes(char.toLowerCase()) ? char : "_"));
+        // Only a-z can be guessed, so anything else (spaces, hyphens, apostrophes, digits)
+        // is revealed up front; otherwise such words could never be solved.
+        return this.word.split("").map(char => {
+            const lower = char.toLowerCase();
+            if (!/^[a-z]$/.test(lower)) return char;
+            return guessedLetters.includes(lower) ? char : "_";
+        });
+    }
+
+    private async loadInstanceState(socket: Socket, gameId: string, gameStatus: any) {
+        const [roundInfo, wordlistWords, gamePlayersData, usedRoundWords] = await Promise.all([
+            db.fetchRoundInfo(socket.data.user.currentRoundId),
+            db.getWordlistWords(gameStatus.wordlist_id),
+            db.getGamePlayers(gameId),
+            db.getUsedWordsInGame(gameId),
+        ]);
+        if (!roundInfo.error && roundInfo.data) {
+            this.word = roundInfo.data.word;
+            this.roundIndex = roundInfo.data.round_index;
+            if (roundInfo.data.started_at && gameStatus.status === "in_progress") {
+                this.startedAt = new Date(roundInfo.data.started_at).getTime();
+            }
+        }
+        this.wordlistWords = wordlistWords ?? [];
+        this.gamePlayerIds = (gamePlayersData ?? []).map((gp: any) => gp.user_id);
+        this.usedWords = usedRoundWords ?? new Set<string>();
+        this.currentRoundId = socket.data.user.currentRoundId;
     }
 
     // ── Action Methods ──────────────────────────────────────────────────────
@@ -183,10 +246,10 @@ export abstract class CoreGameMode {
         const modeId = gameStatus.mode_id;
 
         if (existingPlayer) {
-            socket.join(gameId);
+            let roundPlayer: { id: string } | null = null;
             if (activeRounds && activeRounds.length > 0) {
                 const round = activeRounds[0];
-                const roundPlayer = await db.getRoundPlayer(round.id, userId).catch(() => null);
+                roundPlayer = await db.getRoundPlayer(round.id, userId).catch(() => null);
                 if (roundPlayer) await db.markPlayerAsActive(roundPlayer.id).catch(console.error);
 
                 socket.data.user.currentGameId = gameId;
@@ -194,28 +257,21 @@ export abstract class CoreGameMode {
                 socket.data.user.currentRoundPlayerId = roundPlayer?.id ?? null;
             }
 
+            if (!socket.data.user.currentRoundId) {
+                socket.emit("game:join", { success: false, error: "No active round available to join." });
+                return;
+            }
+
             if (!activeGameInstances[gameId]) {
-                const [roundInfo, wordlistResult, gamePlayersData, usedRoundWords] = await Promise.all([
-                    db.fetchRoundInfo(socket.data.user.currentRoundId),
-                    db.getWordlistWords(gameStatus.wordlist_id).then(words => ({ data: { words } })),
-                    db.getGamePlayers(gameId).then(data => ({ data })),
-                    db.getUsedWordsInGame(gameId).then(data => ({ data })),
-                ]);
-                if (!roundInfo.error && roundInfo.data) {
-                    this.word = roundInfo.data.word;
-                    this.roundIndex = roundInfo.data.round_index;
-                    if (roundInfo.data.started_at) {
-                        this.startedAt = new Date(roundInfo.data.started_at).getTime();
-                    }
-                }
-                this.wordlistWords = wordlistResult.data?.words ?? [];
-                this.gamePlayerIds = (gamePlayersData.data ?? []).map((gp: any) => gp.user_id);
-                this.usedWords = usedRoundWords.data ?? new Set<string>();
-                
-                const count = await db.getActivePlayersCount(socket.data.user.currentRoundId);
-                this.totalPlayersCount = count;
-                this.currentRoundId = socket.data.user.currentRoundId;
+                await this.loadInstanceState(socket, gameId, gameStatus);
+                this.totalPlayersCount = await db.getActivePlayersCount(socket.data.user.currentRoundId);
                 activeGameInstances[gameId] = this;
+            }
+
+            // Someone came back in time: the game is no longer abandoned.
+            if (this.abandonTimer) {
+                clearTimeout(this.abandonTimer);
+                delete this.abandonTimer;
             }
 
             let started = false;
@@ -223,46 +279,64 @@ export abstract class CoreGameMode {
             let startTime: number | undefined = undefined;
             let lives = gameStatus.total_lives;
             let move_set: string[] = [];
-            let playersCount = socket.data.user.currentRoundId 
-                ? await db.getActivePlayersCount(socket.data.user.currentRoundId) 
-                : (this.totalPlayersCount || 0);
-            
+            let playersCount = await db.getActivePlayersCount(socket.data.user.currentRoundId);
+
             if (this.startedAt && gameStatus.status === 'in_progress') {
-                if (this.abandonTimer) {
-                    clearTimeout(this.abandonTimer);
-                    delete this.abandonTimer;
-                }
+                let player = this.players[userId];
 
-                if (!this.players[userId]) {
-                    socket.emit("game:join", { success: false, error: "You abandoned this game and cannot rejoin." });
-                    return;
-                }
-
-                if ((this.players[userId] as any).disconnected) {
+                if (!player) {
+                    // No in-memory state (server restart, or no move made yet this round).
+                    // Only players that are part of the current round may continue.
+                    if (!roundPlayer) {
+                        socket.leave(gameId);
+                        delete socket.data.user.currentGameId;
+                        delete socket.data.user.currentRoundId;
+                        delete socket.data.user.currentRoundPlayerId;
+                        socket.emit("game:join", { success: false, error: "You abandoned this game and cannot rejoin." });
+                        return;
+                    }
+                    player = this.ensurePlayer(userId);
+                    player.startRound(Date.now());
+                } else if (player.disconnected) {
                     this.totalPlayersCount++;
-                    if (this.players[userId].completed) {
+                    if (player.completed) {
                         this.completedPlayersCount++;
                     }
-                    (this.players[userId] as any).disconnected = false;
+                    player.disconnected = false;
                 }
 
                 started = true;
                 startTime = this.startedAt;
-                lives = this.players[userId].lives;
-                move_set = this.players[userId].move_set;
+                lives = player.lives;
+                move_set = player.move_set;
                 maskedWord = this.getMaskedWord(userId);
                 playersCount = this.totalPlayersCount;
+            } else {
+                // Lobby: the database is the source of truth for who is waiting.
+                if (this.players[userId]) this.players[userId].disconnected = false;
+                this.totalPlayersCount = playersCount;
             }
 
-            const existingPlayers = socket.data.user.currentRoundId ? await this.fetchLobbyPlayers(socket.data.user.currentRoundId, gameId, gameStatus.total_lives) : [];
+            socket.join(gameId);
+            const existingPlayers = await this.fetchLobbyPlayers(socket.data.user.currentRoundId, gameId, gameStatus.total_lives);
 
-            socket.emit("game:join", { 
-                success: true, gameId, userId, reconnected: true, isHost, modeId, playersCount, started, maskedWord, startTime, lives, move_set, username: socket.data.user.username, existingPlayers, totalLives: gameStatus.total_lives
+            socket.emit("game:join", {
+                success: true, gameId, userId, reconnected: true, isHost, modeId, playersCount, started, maskedWord, startTime, lives, move_set, username: socket.data.user.username, existingPlayers, totalLives: gameStatus.total_lives,
+                ...this.getTimerPayload(userId)
             });
-            
+
+            if (started) {
+                this.onPlayerRoundActive(socket, userId);
+            }
+
             if (this.shouldBroadcastPlayerEvents()) {
                 socket.to(gameId).emit("game:player_joined", { userId, playersCount, username: socket.data.user.username });
             }
+            return;
+        }
+
+        if (gameStatus.status !== "created" || this.startedAt) {
+            socket.emit("game:join", { success: false, error: "This game has already started." });
             return;
         }
 
@@ -271,6 +345,12 @@ export abstract class CoreGameMode {
             return;
         }
         const roundToJoin = activeRounds[0];
+
+        const currentCount = await db.getActivePlayersCount(roundToJoin.id);
+        if (currentCount >= this.max_players) {
+            socket.emit("game:join", { success: false, error: "This game is full." });
+            return;
+        }
 
         const [gpResult, rpResult] = await Promise.all([
             db.insertGamePlayer(gameId, userId),
@@ -295,39 +375,25 @@ export abstract class CoreGameMode {
 
         socket.join(gameId);
 
+        if (!activeGameInstances[gameId]) {
+            await this.loadInstanceState(socket, gameId, gameStatus);
+            activeGameInstances[gameId] = this;
+        }
+
         const [playersCount, existingPlayers] = await Promise.all([
             db.getActivePlayersCount(roundToJoin.id),
             this.fetchLobbyPlayers(roundToJoin.id, gameId, gameStatus.total_lives)
-        ]); 
-
-        if (!activeGameInstances[gameId]) {
-            const [roundInfo, wordlistResult, gamePlayersData, usedRoundWords] = await Promise.all([
-                db.fetchRoundInfo(socket.data.user.currentRoundId),
-                db.getWordlistWords(gameStatus.wordlist_id).then(words => ({ data: { words } })),
-                db.getGamePlayers(gameId).then(data => ({ data })),
-                db.getUsedWordsInGame(gameId).then(data => ({ data })),
-            ]);
-            if (!roundInfo.error && roundInfo.data) {
-                this.word = roundInfo.data.word;
-                this.roundIndex = roundInfo.data.round_index;
-                if (roundInfo.data.started_at) {
-                    this.startedAt = new Date(roundInfo.data.started_at).getTime();
-                }
-            }
-            this.wordlistWords = wordlistResult.data?.words ?? [];
-            this.gamePlayerIds = (gamePlayersData.data ?? []).map((gp: any) => gp.user_id);
-            this.usedWords = usedRoundWords.data ?? new Set<string>();
-            
-            this.currentRoundId = socket.data.user.currentRoundId;
-            activeGameInstances[gameId] = this;
-        }
+        ]);
 
         this.totalPlayersCount = playersCount;
         if (!this.gamePlayerIds.includes(userId)) {
             this.gamePlayerIds.push(userId);
         }
 
-        socket.emit("game:join", { success: true, gameId, userId, reconnected: false, isHost, modeId, playersCount, username: socket.data.user.username, existingPlayers, totalLives: gameStatus.total_lives });
+        socket.emit("game:join", {
+            success: true, gameId, userId, reconnected: false, isHost, modeId, playersCount, username: socket.data.user.username, existingPlayers, totalLives: gameStatus.total_lives,
+            ...this.getTimerPayload(userId)
+        });
         if (this.shouldBroadcastPlayerEvents()) {
             socket.to(gameId).emit("game:player_joined", { userId, playersCount, existingPlayers, username: socket.data.user.username });
         }
@@ -360,20 +426,59 @@ export abstract class CoreGameMode {
             db.updateRoundStatus(currentRoundId, "in_progress", startedAtIso),
         ]).catch(console.error);
 
+        this.ensurePlayer(userId).startRound(startTime);
+
         const startPayload = {
             success: true,
             maskedWord: this.getMaskedWord(userId),
             lives: this.lives,
-            startTime
+            startTime,
+            ...this.getTimerPayload(userId)
         };
         socket.emit("game:start", startPayload);
         socket.to(gameId).emit("game:start", startPayload);
+
+        this.onPlayerRoundActive(socket, userId);
+    }
+
+    async handleStartNextRound(socket: Socket) {
+        const userId = socket.data.user.id;
+        const gameId = socket.data.user.currentGameId;
+
+        if (this.currentRoundId) {
+            socket.data.user.currentRoundId = this.currentRoundId;
+        }
+
+        const hadPlayer = !!this.players[userId];
+        const player = this.ensurePlayer(userId);
+
+        // Only start the clock once per round. Without this guard a client could call
+        // this mid-round to wipe its guesses / "completed" flag and replay the word.
+        if (!hadPlayer || (!player.startedAt && player.move_index === 0 && !player.completed)) {
+            player.startRound(Date.now());
+        }
+
+        socket.emit("game:started_round", {
+            success: true,
+            startTime: player.startedAt || this.startedAt,
+            lives: player.lives,
+            maskedWord: this.getMaskedWord(userId),
+            ...this.getTimerPayload(userId)
+        });
+
+        if (gameId && !player.completed) {
+            this.onPlayerRoundActive(socket, userId);
+        }
     }
 
     async handleSubmitMove(socket: Socket, payload: any) {
         const parsed = submitMovePayloadSchema.safeParse(payload);
         if (!parsed.success) {
             socket.emit("game:submit_move", { success: false, error: "Invalid payload format." });
+            return;
+        }
+        if (!this.startedAt) {
+            socket.emit("game:submit_move", { success: false, error: "The game has not started yet." });
             return;
         }
         const { guess, timestamp } = parsed.data;
@@ -383,21 +488,13 @@ export abstract class CoreGameMode {
         const username = socket.data.user.username;
         const pfp = socket.data.user.pfp;
 
-        const checkSocketConnected = (uid: string) => {
-            const s = socket.nsp.sockets;
-            for (const [_, clientSocket] of s) {
-                if (clientSocket.data.user?.id === uid) return true;
-            }
-            return false;
-        };
-
         const { moveResponse, finishPromise } = this.onMoveSubmitted(
-            userId, 
+            userId,
             { guess, timestamp: new Date(timestamp) },
             gameId,
             roundId,
             db,
-            checkSocketConnected,
+            this.socketConnectedChecker(socket),
             username,
             pfp
         );
@@ -405,45 +502,42 @@ export abstract class CoreGameMode {
         socket.emit("game:submit_move", moveResponse);
 
         if (finishPromise) {
-            const finishResult = await finishPromise;
-            
-            if (finishResult) {
-                socket.emit(finishResult.playerEvent, finishResult.playerPayload);
-                socket.to(gameId).emit("game:player_finished_broadcast", finishResult.broadcastPayload);
-
-                if (finishResult.winnerBroadcastPayload) {
-                    socket.emit("game:player_finished_broadcast", finishResult.winnerBroadcastPayload);
-                    socket.to(gameId).emit("game:player_finished_broadcast", finishResult.winnerBroadcastPayload);
-                }
-
-                if (finishResult.nextRoundPromise) {
-                    const nextRoundData = await finishResult.nextRoundPromise;
-                    
-                    if (nextRoundData) {
-                        const s = socket.nsp.sockets;
-                        for (const [_, clientSocket] of s) {
-                            if (clientSocket.data.user?.currentGameId === gameId) {
-                                clientSocket.data.user.currentRoundId = nextRoundData.id;
-                            }
-                        }
-                        
-                        socket.emit("game:new_round_ready", nextRoundData);
-                        socket.to(gameId).emit("game:new_round_ready", nextRoundData);
-                    }
-                } else if (finishResult.gameFullyEndedPromise) {
-                    await finishResult.gameFullyEndedPromise;
-                    const endPayload = { 
-                        result: "game_ended", 
-                        leaderboard: finishResult.leaderboard,
-                        finalScores: this.getScoresSnapshot()
-                    };
-                    socket.emit("game:fully_completed", endPayload);
-                    socket.to(gameId).emit("game:fully_completed", endPayload);
-                    
-                    delete activeGameInstances[gameId];
-                }
-            }
+            await this.dispatchFinishResult(socket, gameId, await finishPromise);
         }
+    }
+
+    /**
+     * Ends the round for a player who failed without making a move (e.g. timer ran out)
+     * and runs the same finish / round transition flow as a losing guess.
+     */
+    async forceFailPlayer(socket: Socket) {
+        const userId = socket.data.user.id;
+        const gameId = socket.data.user.currentGameId;
+        const roundId = this.currentRoundId;
+        const player = this.players[userId];
+        if (!gameId || !player || player.completed) return;
+
+        player.finish(this.startedAt);
+        this.completedPlayersCount++;
+        const playerResult = this.evaluatePlayerResult(userId, false);
+
+        socket.emit("game:submit_move", {
+            success: true,
+            maskedWord: this.getMaskedWord(userId),
+            lives: player.lives,
+            completed: true,
+            result: playerResult,
+            timeTakenMs: player.finalTime,
+            roundEnded: this.completedPlayersCount >= this.totalPlayersCount,
+            move_set: player.move_set,
+            ...this.getTimerPayload(userId)
+        });
+
+        const finishResult = await this.onPlayerFinished(
+            userId, gameId, roundId, player, playerResult,
+            this.roundIndex < this.numberOfWords, db, this.socketConnectedChecker(socket)
+        );
+        await this.dispatchFinishResult(socket, gameId, finishResult);
     }
 
     async handleLeave(socket: Socket) {
@@ -451,48 +545,19 @@ export abstract class CoreGameMode {
         const gameId = socket.data.user.currentGameId;
         const roundId = socket.data.user.currentRoundId;
 
-        const checkSocketConnected = (uid: string) => {
-            const s = socket.nsp.sockets;
-            for (const [_, clientSocket] of s) {
-                if (clientSocket.data.user?.id === uid) return true;
-            }
-            return false;
-        };
-
         const { gameAbandoned, transitionResult } = await this.onPlayerLeave(
-            roundId, gameId, userId, db, checkSocketConnected
+            roundId, gameId, userId, db, this.socketConnectedChecker(socket)
         );
 
         if (gameAbandoned) {
-            this.abandonTimer = setTimeout(async () => {
-                delete activeGameInstances[gameId];
-                socket.to(gameId).emit("game:abandoned");
-                await db.abandonGameAndRound(gameId, roundId).catch(console.error);
-            }, 10000);
+            this.scheduleAbandon(socket, gameId, roundId);
         }
 
         if (transitionResult) {
             if (transitionResult.winnerBroadcastPayload) {
                 socket.to(gameId).emit("game:player_finished_broadcast", transitionResult.winnerBroadcastPayload);
             }
-            if (transitionResult.nextRoundPromise) {
-                const nextRoundData = await transitionResult.nextRoundPromise;
-                const s = socket.nsp.sockets;
-                for (const [_, clientSocket] of s) {
-                    if (clientSocket.data.user?.currentGameId === gameId) {
-                        clientSocket.data.user.currentRoundId = nextRoundData.id;
-                    }
-                }
-                socket.to(gameId).emit("game:new_round_ready", nextRoundData);
-            } else if (transitionResult.gameFullyEndedPromise) {
-                await transitionResult.gameFullyEndedPromise;
-                socket.to(gameId).emit("game:fully_completed", { 
-                    result: "game_ended", 
-                    leaderboard: transitionResult.leaderboard,
-                    finalScores: this.getScoresSnapshot()
-                });
-                delete activeGameInstances[gameId];
-            }
+            await this.dispatchRoundTransition(socket, gameId, transitionResult, false);
         }
 
         delete socket.data.user.currentGameId;
@@ -500,10 +565,10 @@ export abstract class CoreGameMode {
         delete socket.data.user.currentRoundPlayerId;
 
         socket.leave(gameId);
-        socket.emit("game:leave", { success: true });
-        
+        socket.emit("game:leave", { success: true, word: this.word });
+
         if (this.shouldBroadcastPlayerEvents()) {
-            socket.to(gameId).emit("game:player_left", { userId, playersCount: this.totalPlayersCount });
+            socket.to(gameId).emit("game:player_left", { userId, playersCount: this.totalPlayersCount, username: socket.data.user.username });
         }
     }
 
@@ -512,60 +577,96 @@ export abstract class CoreGameMode {
         const gameId = socket.data.user.currentGameId;
         const roundId = socket.data.user.currentRoundId;
 
-        const s = socket.nsp.sockets;
-        let otherSocketConnected = false;
-        for (const [id, clientSocket] of s) {
+        for (const [id, clientSocket] of socket.nsp.sockets) {
             if (id !== socket.id && clientSocket.data.user?.id === userId && clientSocket.data.user?.currentGameId === gameId) {
-                otherSocketConnected = true;
-                break;
+                return;
             }
         }
-        if (otherSocketConnected) return;
-
-        const checkSocketConnected = (uid: string) => {
-            for (const [_, clientSocket] of s) {
-                if (clientSocket.data.user?.id === uid) return true;
-            }
-            return false;
-        };
 
         const { gameAbandoned, transitionResult } = await this.onPlayerLeave(
-            roundId, gameId, userId, db, checkSocketConnected
+            roundId, gameId, userId, db, this.socketConnectedChecker(socket)
         );
 
         if (gameAbandoned) {
-            this.abandonTimer = setTimeout(async () => {
-                delete activeGameInstances[gameId];
-                socket.to(gameId).emit("game:abandoned");
-                await db.abandonGameAndRound(gameId, roundId).catch(console.error);
-            }, 10000);
+            this.scheduleAbandon(socket, gameId, roundId);
         }
 
         if (transitionResult) {
             if (transitionResult.winnerBroadcastPayload) {
                 socket.to(gameId).emit("game:player_finished_broadcast", transitionResult.winnerBroadcastPayload);
             }
-            if (transitionResult.nextRoundPromise) {
-                const nextRoundData = await transitionResult.nextRoundPromise;
-                for (const [_, clientSocket] of s) {
-                    if (clientSocket.data.user?.currentGameId === gameId) {
-                        clientSocket.data.user.currentRoundId = nextRoundData.id;
-                    }
-                }
-                socket.to(gameId).emit("game:new_round_ready", nextRoundData);
-            } else if (transitionResult.gameFullyEndedPromise) {
-                await transitionResult.gameFullyEndedPromise;
-                socket.to(gameId).emit("game:fully_completed", { 
-                    result: "game_ended", 
-                    leaderboard: transitionResult.leaderboard,
-                    finalScores: this.getScoresSnapshot()
-                });
-                delete activeGameInstances[gameId];
-            }
+            await this.dispatchRoundTransition(socket, gameId, transitionResult, false);
         }
 
         if (this.shouldBroadcastPlayerEvents()) {
-            socket.to(gameId).emit("game:player_disconnected", { userId, playersCount: this.totalPlayersCount });
+            socket.to(gameId).emit("game:player_disconnected", { userId, reason, playersCount: this.totalPlayersCount, username: socket.data.user.username });
+        }
+    }
+
+    protected socketConnectedChecker(socket: Socket) {
+        return (uid: string) => {
+            for (const [, clientSocket] of socket.nsp.sockets) {
+                if (clientSocket.data.user?.id === uid) return true;
+            }
+            return false;
+        };
+    }
+
+    private scheduleAbandon(socket: Socket, gameId: string, roundId: string) {
+        if (this.abandonTimer) clearTimeout(this.abandonTimer);
+        this.abandonTimer = setTimeout(async () => {
+            delete this.abandonTimer;
+            if (activeGameInstances[gameId] === this) delete activeGameInstances[gameId];
+            this.dispose();
+            socket.to(gameId).emit("game:abandoned");
+            await db.abandonGameAndRound(gameId, roundId).catch(console.error);
+        }, 10000);
+    }
+
+    protected async dispatchFinishResult(socket: Socket, gameId: string, finishResult: PlayerFinishedResult | null) {
+        if (!finishResult) return;
+
+        socket.emit(finishResult.playerEvent, finishResult.playerPayload);
+        socket.to(gameId).emit("game:player_finished_broadcast", finishResult.broadcastPayload);
+
+        if (finishResult.winnerBroadcastPayload) {
+            socket.emit("game:player_finished_broadcast", finishResult.winnerBroadcastPayload);
+            socket.to(gameId).emit("game:player_finished_broadcast", finishResult.winnerBroadcastPayload);
+        }
+
+        await this.dispatchRoundTransition(socket, gameId, finishResult, true);
+    }
+
+    protected async dispatchRoundTransition(
+        socket: Socket,
+        gameId: string,
+        transition: Pick<RoundTransitionResult, "nextRoundPromise" | "gameFullyEndedPromise" | "leaderboard">,
+        includeSelf: boolean
+    ) {
+        const emitAll = (event: string, payload?: unknown) => {
+            if (includeSelf) socket.emit(event, payload);
+            socket.to(gameId).emit(event, payload);
+        };
+
+        if (transition.nextRoundPromise) {
+            const nextRoundData = await transition.nextRoundPromise;
+            if (!nextRoundData) return;
+
+            for (const [, clientSocket] of socket.nsp.sockets) {
+                if (clientSocket.data.user?.currentGameId === gameId) {
+                    clientSocket.data.user.currentRoundId = nextRoundData.id;
+                }
+            }
+            emitAll("game:new_round_ready", nextRoundData);
+        } else if (transition.gameFullyEndedPromise) {
+            await transition.gameFullyEndedPromise;
+            emitAll("game:fully_completed", {
+                result: "game_ended",
+                leaderboard: transition.leaderboard,
+                finalScores: this.getScoresSnapshot()
+            });
+            if (activeGameInstances[gameId] === this) delete activeGameInstances[gameId];
+            this.dispose();
         }
     }
 
@@ -592,7 +693,17 @@ export abstract class CoreGameMode {
 
         const { player, processedMove, playerResult, roundEnded, hasNextRound } = this.processMove(userId, move, {});
 
-        this.enqueueDbOp(() => dbInstance.insertMove(userId, roundId, move.guess, move.timestamp.toISOString()));
+        // Duplicate guesses and guesses after the player finished are ignored, so don't log them.
+        if (processedMove) {
+            this.enqueueDbOp(() => dbInstance.insertMove({
+                round_id: roundId,
+                user_id: userId,
+                move_index: processedMove.move_index,
+                guess: processedMove.guess,
+                correct: processedMove.correct,
+                created_at: move.timestamp.toISOString(),
+            }));
+        }
 
         const moveResponse = {
             success: true,
@@ -604,7 +715,8 @@ export abstract class CoreGameMode {
             result: playerResult,
             timeTakenMs: player.getTimeTaken(this.startedAt),
             roundEnded,
-            move_set: player.move_set
+            move_set: player.move_set,
+            ...this.getTimerPayload(userId)
         };
 
         if (playerResult === "in_progress") {
@@ -642,7 +754,7 @@ export abstract class CoreGameMode {
         }
 
         const profile = this.playerProfiles[userId] || { username: "Player", pfp: "" };
-        
+
         const playerPayload = {
             userId,
             roundResult: playerResult,
@@ -653,7 +765,7 @@ export abstract class CoreGameMode {
             score: this.getPlayerScore(userId),
             lives: player.lives
         };
-        
+
         const broadcastPayload = {
             userId,
             result: playerResult,
@@ -672,11 +784,20 @@ export abstract class CoreGameMode {
             broadcastPayload,
             winnerBroadcastPayload: transitionResult?.winnerBroadcastPayload,
             roundEnded: transitionResult !== null,
-            nextRoundPromise: transitionResult?.nextRoundPromise,
+            nextRoundPromise: transitionResult?.nextRoundPromise ?? undefined,
             gameFullyEnded: transitionResult?.gameFullyEnded ?? false,
             gameFullyEndedPromise: transitionResult?.gameFullyEndedPromise,
             leaderboard: transitionResult?.leaderboard
         };
+    }
+
+    protected pickNextWord(): string {
+        const unused = this.wordlistWords.filter(w => !this.usedWords.has(w.toLowerCase()));
+        if (unused.length === 0) {
+            this.usedWords.clear();
+            return this.wordlistWords[Math.floor(Math.random() * this.wordlistWords.length)] || "hangman";
+        }
+        return unused[Math.floor(Math.random() * unused.length)]!;
     }
 
     async triggerRoundTransitionIfNeeded(
@@ -684,10 +805,16 @@ export abstract class CoreGameMode {
         roundId: string,
         dbInstance: any,
         checkSocketConnected: (userId: string) => boolean
-    ): Promise<any | null> {
-        if (this.completedPlayersCount < this.totalPlayersCount) {
+    ): Promise<RoundTransitionResult | null> {
+        if (this._gameEnded || this.completedPlayersCount < this.totalPlayersCount) {
             return null;
         }
+        // Guard against the same round being transitioned twice (e.g. a finishing move
+        // racing with another player's disconnect).
+        if (this._transitioning || roundId !== this.currentRoundId) {
+            return null;
+        }
+        this._transitioning = true;
 
         await (this._pendingDbOps || Promise.resolve());
 
@@ -696,10 +823,10 @@ export abstract class CoreGameMode {
         const winnerBroadcastPayload = this.buildWinnerPayload();
 
         if (this.roundIndex >= this.numberOfWords) {
+            this._gameEnded = true;
             const gameFullyEndedPromise = this.enqueueDbOp(async () => {
-                const endedAt = new Date().toISOString();
-                await dbInstance.finishGame(gameId, endedAt);
-                
+                await dbInstance.finishGame(gameId);
+
                 await Promise.all(this.gamePlayerIds.map(async pid => {
                     const result = this.getFinalResult(pid);
                     await dbInstance.updateGamePlayerResult(gameId, pid, result);
@@ -715,53 +842,46 @@ export abstract class CoreGameMode {
             };
         }
 
-        if (this._transitioning) {
-            return { winnerBroadcastPayload, nextRoundPromise: null };
-        }
-        this._transitioning = true;
-
         const setupNextRound = async () => {
-            const activeUserIds = this.gamePlayerIds.filter(pid => {
-                if (this.players[pid] && (this.players[pid] as any).disconnected) return false;
-                return checkSocketConnected(pid);
-            });
-            if (activeUserIds.length === 0) {
-                await dbInstance.abandonGameAndRound(gameId, roundId);
-                return null;
+            try {
+                const activeUserIds = this.gamePlayerIds.filter(pid => {
+                    if (this.players[pid]?.disconnected) return false;
+                    return checkSocketConnected(pid);
+                });
+                if (activeUserIds.length === 0) {
+                    await dbInstance.abandonGameAndRound(gameId, roundId);
+                    return null;
+                }
+
+                const newWord = this.pickNextWord();
+                this.usedWords.add(newWord.toLowerCase());
+
+                const newRoundId = crypto.randomUUID();
+                this.roundIndex++;
+                this.resetRound(newWord);
+                this.currentRoundId = newRoundId;
+                this.totalPlayersCount = activeUserIds.length;
+
+                await this.enqueueDbOp(async () => {
+                    await dbInstance.insertNewRound(gameId, this.roundIndex, newWord, newRoundId);
+                    await Promise.all(activeUserIds.map(uid => dbInstance.insertGameRoundPlayer(newRoundId, uid)));
+                });
+
+                return {
+                    id: newRoundId,
+                    maskedWord: this.getMaskedWord(undefined),
+                    startTime: Date.now(),
+                    lives: this.lives,
+                    gamePlayerIds: this.gamePlayerIds
+                };
+            } finally {
+                this._transitioning = false;
             }
-
-            let newWord = this.wordlistWords.find(w => !this.usedWords.has(w));
-            if (!newWord) {
-                this.usedWords.clear();
-                newWord = this.wordlistWords[0] || "error";
-            }
-            this.usedWords.add(newWord);
-
-            const newRoundId = crypto.randomUUID();
-            this.roundIndex++;
-            this.resetRound(newWord);
-
-            await this.enqueueDbOp(async () => {
-                await dbInstance.insertNewRound(gameId, this.roundIndex, newWord, newRoundId);
-                const playerPromises = activeUserIds.map(uid => dbInstance.insertGameRoundPlayer(newRoundId, uid));
-                await Promise.all(playerPromises);
-            });
-
-            this.currentRoundId = newRoundId;
-            this._transitioning = false;
-
-            return {
-                id: newRoundId,
-                maskedWord: this.getMaskedWord(undefined),
-                startTime: Date.now(),
-                gamePlayerIds: this.gamePlayerIds
-            };
         };
 
-        const nextRoundPromise = setupNextRound();
         return {
             winnerBroadcastPayload,
-            nextRoundPromise
+            nextRoundPromise: setupNextRound()
         };
     }
 
@@ -771,13 +891,17 @@ export abstract class CoreGameMode {
         userId: string,
         dbInstance: any,
         checkSocketConnected: (uid: string) => boolean
-    ): Promise<{ gameAbandoned: boolean, transitionResult: any | null }> {
+    ): Promise<{ gameAbandoned: boolean, transitionResult: RoundTransitionResult | null }> {
         await dbInstance.markPlayerAsDisconnectedByRound(roundId, userId).catch(console.error);
 
         this.onPlayerDisconnected(userId);
 
-        if (this.totalPlayersCount === 0) {
+        if (this.totalPlayersCount <= 0) {
             return { gameAbandoned: true, transitionResult: null };
+        }
+
+        if (!this.startedAt) {
+            return { gameAbandoned: false, transitionResult: null };
         }
 
         const transitionResult = await this.triggerRoundTransitionIfNeeded(gameId, roundId, dbInstance, checkSocketConnected);
@@ -785,13 +909,14 @@ export abstract class CoreGameMode {
     }
 
     public onPlayerDisconnected(userId: string) {
-        if (this.players[userId]) {
-            if (!(this.players[userId] as any).disconnected) {
-                (this.players[userId] as any).disconnected = true;
-                this.totalPlayersCount--;
-                if (this.players[userId].completed) {
-                    this.completedPlayersCount--;
-                }
+        // Players are created lazily, so someone who never guessed this round has no entry yet.
+        // They still count towards totalPlayersCount, so create one to keep the counters right.
+        const player = this.ensurePlayer(userId);
+        if (!player.disconnected) {
+            player.disconnected = true;
+            this.totalPlayersCount = Math.max(0, this.totalPlayersCount - 1);
+            if (player.completed) {
+                this.completedPlayersCount = Math.max(0, this.completedPlayersCount - 1);
             }
         }
     }

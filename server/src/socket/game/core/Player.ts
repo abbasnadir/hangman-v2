@@ -4,6 +4,8 @@ export class Player {
     public completed: boolean = false;
     public finalTime: number = 0;
     public isConnected: boolean = true;
+    public disconnected: boolean = false;
+    public wrongGuesses: number = 0;
 
     public startedAt: number = 0;
 
@@ -18,15 +20,18 @@ export class Player {
         this.finalTime = 0;
         this.move_set = [];
         this.move_index = 0;
+        this.wrongGuesses = 0;
     }
 
-    recordGuess(guess: string, isCorrect: boolean, fallbackStartedAt: number) {
+    recordGuess(guess: string, isCorrect: boolean, fallbackStartedAt: number, costsLife: boolean = true) {
         if (this.completed) return;
         
         this.move_set.push(guess);
         this.move_index += 1;
 
         if (!isCorrect) {
+            this.wrongGuesses += 1;
+            if (!costsLife) return;
             this.lives -= 1;
             if (this.lives <= 0) {
                 this.finish(fallbackStartedAt);

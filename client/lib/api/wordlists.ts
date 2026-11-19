@@ -16,6 +16,13 @@ const getAuthToken = async () => {
 
 let allAvailableWordlistsCache: Wordlist[] | null = null;
 
+// The cache holds the signed-in user's private lists, so drop it whenever the user changes.
+supabase.auth.onAuthStateChange((event) => {
+  if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+    allAvailableWordlistsCache = null;
+  }
+});
+
 export const WordlistAPI = {
   getDefaultWordlists: async (): Promise<Wordlist[]> => {
     const token = await getAuthToken();

@@ -4,7 +4,7 @@ import socketRouter from "./lib/socketRouter.js";
 
 let io: Server;
 
-export const createSocketServer = (httpServer: HttpServer) => {
+export const createSocketServer = async (httpServer: HttpServer) => {
   io = new Server(httpServer, {
     cors: {
       origin:
@@ -15,7 +15,7 @@ export const createSocketServer = (httpServer: HttpServer) => {
     },
   });
 
-  socketRouter(io);
+  await socketRouter(io);
 };
 
 export const forceDisconnectUser = (userId: string) => {

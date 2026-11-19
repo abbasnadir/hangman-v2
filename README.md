@@ -25,7 +25,31 @@ Live at [hangman.abbasnadir.tech](https://hangman.abbasnadir.tech) (client on Ve
 
 *The multiplayer setup screen and the host's lobby, captured on the live site as a guest.*
 
+<<<<<<< HEAD
 ## How it works
+=======
+## 🎲 Game Modes
+
+| id | Mode | Players | How you lose |
+|----|------|---------|--------------|
+| 1 | Classic | 1 | Run out of lives (each wrong guess costs one) |
+| 2 | Multiplayer | 2–50 | Same as Classic; fastest solver wins the round |
+| 3 | Countdown | 1 | Run out of time. Each word starts at 60s and every wrong guess burns 6s. There are no lives. |
+
+The hangman drawing (`client/components/HangmanFigure.tsx`) is an SVG built in 10 steps: base, pole, beam, rope, head, body, two arms and two legs. Each lost life (or, in Countdown, each slice of elapsed time) adds the next part. When the drawing is complete the figure turns red, gets X eyes and swings. `client/public/hangman-stages.svg` is a standalone looping SVG of the same animation.
+
+Countdown mode needs its row in the `game_modes` table:
+
+```sql
+insert into game_modes (id, name, min_players, max_players, ranked)
+values (3, 'Countdown', 1, 1, false);
+```
+
+## 🛠 Tech Stack
+- **Frontend:** Next.js, React, Tailwind CSS v4, Framer Motion
+- **Backend:** Node.js, Express, Socket.io
+- **Database:** Supabase (PostgreSQL)
+>>>>>>> 9456c9c (feat: Add countdown mode, hangman SVG and fix game bugs)
 
 **A game, end to end.** The client creates a game with `POST /game/create` (wordlist, mode, lives, number of words). The server checks the wordlist and mode, refuses if you're already in an active game, and inserts the game and its first round. The client then opens a Socket.IO connection, authenticated with the Supabase access token, and sends `game:join`. From there everything is a socket event: `game:start` (host only), `game:submit_move` for each letter, `game:start_next_round` and `game:leave`. The server answers the player who guessed and broadcasts joins, finishes, round results and the final leaderboard to the rest of the room.
 

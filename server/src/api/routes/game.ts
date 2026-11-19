@@ -7,7 +7,7 @@ import {
 } from "../../shared/errors/httpErrors.js";
 import { z } from "zod";
 import { gameSchema } from "../schemas/gameSchema.js";
-import { fetchUserActiveGameRound } from "../../shar../../shared/utils/dbQueries.js";
+import { fetchUserActiveGameRound } from "../../shared/utils/dbQueries.js";
 
 /* GET home page. */
 const gameRouter: RouterObject = {
@@ -46,6 +46,9 @@ const gameRouter: RouterObject = {
 
         if (wordlistResult.error) throw new BadRequestError(wordlistResult.error.message);
         if (!wordlistResult.data) throw new NotFoundError("Wordlist not found");
+        if (!Array.isArray(wordlistResult.data.words) || wordlistResult.data.words.length === 0) {
+          throw new BadRequestError("The selected wordlist has no words.");
+        }
 
         if (gameModeResult.error) throw new BadRequestError(gameModeResult.error.message);
         if (!gameModeResult.data) throw new NotFoundError("Game mode not found");

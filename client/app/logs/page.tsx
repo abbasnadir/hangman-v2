@@ -70,6 +70,7 @@ export default function LogsPage() {
             >
               <option value="all">All Modes</option>
               <option value="Single Player">Single Player</option>
+              <option value="Countdown">Countdown</option>
               <option value="Multiplayer">Multiplayer</option>
             </select>
 
@@ -160,10 +161,16 @@ export default function LogsPage() {
                               </div>
                               
                               <div className="flex flex-col items-end shrink-0">
-                                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1 flex justify-end w-full">Lives</span>
+                                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1 flex justify-end w-full">{game.gameMode === 'Countdown' ? 'Misses' : 'Lives'}</span>
                                 <div className="flex items-center gap-1.5 bg-zinc-950 px-4 py-2 rounded-xl border border-white/5 shadow-inner">
-                                  <span className="text-red-500 text-sm">❤️</span>
-                                  <span className="font-mono font-bold text-zinc-200 text-sm">{Math.max(0, livesRemaining)} / {game.totalLives}</span>
+                                  {game.gameMode === 'Countdown' ? (
+                                    <span className="font-mono font-bold text-zinc-200 text-sm">{round.usedLives}</span>
+                                  ) : (
+                                    <>
+                                      <span className="text-red-500 text-sm">❤️</span>
+                                      <span className="font-mono font-bold text-zinc-200 text-sm">{Math.max(0, livesRemaining)} / {game.totalLives}</span>
+                                    </>
+                                  )}
                                 </div>
                               </div>
                             </div>

@@ -130,7 +130,14 @@ export async function abandonGameAndRound(gameId: string, roundId: string) {
     .is("result", null);
 }
 
-export async function insertMove(moveToInsert: any) {
+export async function insertMove(moveToInsert: {
+  round_id: string;
+  user_id: string;
+  move_index: number;
+  guess: string;
+  correct: boolean;
+  created_at: string;
+}) {
   const { error } = await supabase.from("moves").insert(moveToInsert);
   if (error) throw new Error(error.message);
 }

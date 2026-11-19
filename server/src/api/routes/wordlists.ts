@@ -12,6 +12,7 @@ import {
   reasonableWordSchema,
   usernameValueSchema,
 } from "../schemas/common.schemas.js";
+import { escapeLike } from "../../shared/utils/escapeLike.js";
 
 const wordlistsRouter: RouterObject = {
   path: "/wordlists",
@@ -25,7 +26,7 @@ const wordlistsRouter: RouterObject = {
       handler: async (_req: Request, res: Response) => {
         const { data: wordlists, error } = await supabase
           .from("wordlists")
-          .select("name, words, id")
+          .select("name, words, id, default, is_public")
           .eq("default", true)
           .eq("is_public", true);
 
@@ -54,7 +55,7 @@ const wordlistsRouter: RouterObject = {
         const { data: wordlists, error } = await supabase
           .from("wordlists")
           .select("owner_id, name, words, created_at, updated_at, default, id")
-          .ilike("name", `%${query}%`)
+          .ilike("name", `%${escapeLike(query)}%`)
           .eq("is_public", true)
           .limit(limit)
           .range((page - 1) * limit, page * limit - 1);
@@ -102,7 +103,7 @@ const wordlistsRouter: RouterObject = {
       zodSchema: z.object({
         body: z.object({
           name: usernameValueSchema,
-          words: z.array(reasonableWordSchema).max(250),
+          words: z.array(reasonableWordSchema).min(1, "A wordlist needs at least one word.").max(250),
           is_public: z.boolean().default(false),
         }),
       }),
@@ -155,7 +156,7 @@ const wordlistsRouter: RouterObject = {
         body: z.object({
           id: idValueSchema,
           name: usernameValueSchema.optional(),
-          words: z.array(reasonableWordSchema).max(250).optional(),
+          words: z.array(reasonableWordSchema).min(1, "A wordlist needs at least one word.").max(250).optional(),
           is_public: z.boolean().optional(),
         }),
       }),
@@ -180,23 +181,25 @@ const wordlistsRouter: RouterObject = {
           throw new NotFoundError("Wordlist not found.");
         }
 
-        const { data: conflictingWordlist, error: conflictError } =
-          await supabase
-            .from("wordlists")
-            .select("id")
-            .eq("owner_id", req.user.id)
-            .eq("name", name)
-            .neq("id", id)
-            .single();
+        if (name !== undefined) {
+          const { data: conflictingWordlist, error: conflictError } =
+            await supabase
+              .from("wordlists")
+              .select("id")
+              .eq("owner_id", req.user.id)
+              .eq("name", name)
+              .neq("id", id)
+              .maybeSingle();
 
-        if (conflictError && conflictError.code !== "PGRST116") {
-          throw new BadRequestError(conflictError.message);
-        }
+          if (conflictError) {
+            throw new BadRequestError(conflictError.message);
+          }
 
-        if (conflictingWordlist) {
-          throw new BadRequestError(
-            "You already have a wordlist with this name.",
-          );
+          if (conflictingWordlist) {
+            throw new BadRequestError(
+              "You already have a wordlist with this name.",
+            );
+          }
         }
 
         const updates: Partial<{
@@ -213,7 +216,6 @@ const wordlistsRouter: RouterObject = {
 
         if (Object.keys(updates).length === 0) {
           throw new BadRequestError("No fields to update");
-          return;
         }
 
         const { data: wordlist, error: updateError } = await supabase

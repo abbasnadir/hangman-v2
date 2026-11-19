@@ -121,11 +121,18 @@ const profileRouter: RouterObject = {
           updates.pfp = body.pfp === "" ? DEFAULT_PROFILE_PICTURE : body.pfp;
 
           if (body.pfp !== "") {
+            // Compare the resolved URL so "<myId>/../<otherId>/x.png" can't slip through.
+            let pfpUrl: URL | null = null;
+            try {
+              pfpUrl = new URL(body.pfp);
+            } catch {
+              pfpUrl = null;
+            }
+            const allowedPrefix = `/storage/v1/object/public/profile_pictures/${req.user.id}/`;
             if (
-              !body.pfp.startsWith(
-                process.env.SUPABASE_URL +
-                `/storage/v1/object/public/profile_pictures/${req.user.id}`,
-              )
+              !pfpUrl ||
+              pfpUrl.origin !== new URL(process.env.SUPABASE_URL!).origin ||
+              !pfpUrl.pathname.startsWith(allowedPrefix)
             ) {
               throw new BadRequestError(
                 "Profile picture must be stored in the game storage",
@@ -153,6 +160,9 @@ const profileRouter: RouterObject = {
           )
           .single();
 
+        if (error?.code === "23505") {
+          throw new BadRequestError("Username already taken");
+        }
         if (error || !profile) {
           throw new NotFoundError("User not found");
         }

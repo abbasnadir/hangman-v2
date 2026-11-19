@@ -8,11 +8,9 @@ import {
   fetchGameStatus,
   getProfile
 } from "../../../shared/utils/dbQueries.js";
-import { Classic } from "../../game/modes/Classic/index.js";
-import { Multiplayer } from "../../game/modes/Multiplayer/index.js";
-import type { CoreGameMode } from "../../game/core/CoreGameMode.js";
 import { joinGamePayloadSchema } from "../../schemas/gameProcessSchema.js";
 import { activeGameInstances } from "../../game/core/registry.js";
+import { createGameMode } from "../../game/core/factory.js";
 
 /**
  * Handles a user joining a game lobby.
@@ -21,7 +19,7 @@ import { activeGameInstances } from "../../game/core/registry.js";
  * 1. Checks if the user is in another active game system-wide (prevents playing 2 games at once).
  * 2. Checks if the user already has a socket connected in this game room (multi-tab prevention).
  * 3. Checks if the player was already in the DB for this game (reconnection flow) or is new.
- * 4. Initializes the appropriate CoreGameMode (Classic or Multiplayer) if it isn't in memory yet.
+ * 4. Initializes the appropriate CoreGameMode (Classic, Multiplayer or Countdown) if it isn't in memory yet.
  * 5. Calls gameMode.handleJoin to do DB inserts and emit events.
  */
 export const joinHandler = async (socket: Socket, payload: unknown) => {
@@ -92,7 +90,7 @@ export const joinHandler = async (socket: Socket, payload: unknown) => {
     const modeId = gameStatus.mode_id;
     let gameMode = activeGameInstances[gameId];
     if (!gameMode) {
-        gameMode = modeId === 2 ? new Multiplayer(gameStatus.total_lives) : new Classic(gameStatus.total_lives);
+        gameMode = createGameMode(modeId, gameStatus.total_lives);
         gameMode.createdBy = gameStatus.created_by;
         gameMode.numberOfWords = gameStatus.number_of_words;
         gameMode.wordlistId = gameStatus.wordlist_id;

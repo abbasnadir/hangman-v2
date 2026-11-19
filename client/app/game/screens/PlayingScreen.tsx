@@ -1,7 +1,8 @@
 import React from 'react';
 import { WordDisplay } from '@/components/WordDisplay';
-import { GameHeader } from '@/components/GameControls';
+import { GameHeader, type CountdownState } from '@/components/GameControls';
 import { KeyboardRow, keyboardLayout } from '@/components/Keyboard';
+import { HangmanFigure } from '@/components/HangmanFigure';
 
 interface PlayingScreenProps {
     disconnectNotification?: string | null;
@@ -13,8 +14,14 @@ interface PlayingScreenProps {
     correctKeys: Set<string>;
     wrongKeys: Set<string>;
     onKeyPress: (key: string) => void;
+    /** 0..1, how far along the hangman drawing is. Defaults to lives lost / total lives. */
+    hangmanProgress?: number;
+    countdown?: CountdownState;
     children?: React.ReactNode; // For rendering overlays like Leaderboard
 }
+
+export const livesProgress = (lives: number, totalLives: number) =>
+    totalLives > 0 ? (totalLives - lives) / totalLives : 0;
 
 export const PlayingScreen: React.FC<PlayingScreenProps> = ({
     disconnectNotification,
@@ -26,6 +33,8 @@ export const PlayingScreen: React.FC<PlayingScreenProps> = ({
     correctKeys,
     wrongKeys,
     onKeyPress,
+    hangmanProgress,
+    countdown,
     children,
 }) => {
     return (
@@ -41,12 +50,20 @@ export const PlayingScreen: React.FC<PlayingScreenProps> = ({
                 totalLives={totalLivesState}
                 time={displayTime}
                 onGiveUp={onGiveUp}
+                {...(countdown ? { countdown } : {})}
             />
 
-            <WordDisplay 
-                wordArr={maskedWord} 
-                wordCount={maskedWord.join("").split(" ")} 
-            />
+            <div className="flex flex-col items-center w-full">
+                <HangmanFigure
+                    progress={hangmanProgress ?? livesProgress(lives, totalLivesState)}
+                    className="h-32 sm:h-44 md:h-52 w-auto"
+                />
+
+                <WordDisplay 
+                    wordArr={maskedWord} 
+                    wordCount={maskedWord.join("").split(" ")} 
+                />
+            </div>
 
             <div className="mb-4 overflow-x-auto sm:m-0 w-full px-2">
                 {keyboardLayout.map((row, rowIndex) => (

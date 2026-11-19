@@ -169,7 +169,7 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ gameId, initia
                 score: p.score,
                 timeTakenMs: p.totalTimeMs,
                 lives: 0,
-                result: 'completed'
+                result: p.result ?? 'completed'
             })));
         }
     });
@@ -190,7 +190,9 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ gameId, initia
     });
 
     useListener('game:started_round', (data: any) => {
-        if (data.success && data.startTime) setGameStartTime(data.startTime);
+        if (!data.success) return;
+        if (data.startTime) setGameStartTime(data.startTime);
+        if (typeof data.lives === 'number') setLives(data.lives);
     });
 
     const handleNextRound = () => {
@@ -200,7 +202,7 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ gameId, initia
         setStatus('playing');
         setWord('');
         setMaskedWord(nextRoundData.maskedWord || []);
-        setLives(nextRoundData.lives ?? TOTAL_LIVES);
+        setLives(nextRoundData.lives ?? totalLivesState);
         setPressedKeys(new Set());
         setFinishedPlayers([]);
         setDisplayTime("0.00s");

@@ -3,6 +3,7 @@ import type { RouterObject } from "../types/router.js";
 import { NotFoundError } from "../../shared/errors/httpErrors.js";
 import { fetchUserWithUsername } from "../../shared/utils/dbQueries.js";
 import { supabase } from "../lib/supabaseClient.js";
+import { escapeLike } from "../../shared/utils/escapeLike.js";
 import { z } from "zod";
 import {
   querySearchSchema,
@@ -68,7 +69,7 @@ const profilesRouter: RouterObject = {
         const { data: profiles, error } = await supabase
           .from("profiles")
           .select("id, username, pfp, status")
-          .ilike("username", `%${query}%`)
+          .ilike("username", `%${escapeLike(query)}%`)
           .is("deleted_at", null)
           .limit(limit)
           .range((page - 1) * limit, page * limit - 1);

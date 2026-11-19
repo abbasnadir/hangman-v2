@@ -11,6 +11,7 @@ import { validate } from "./inputSanitizer.js";
 import { SocketRouteObjectSchema } from "../schemas/socketHandlerSchema.js";
 import { UnauthorizedError } from "../../shared/errors/httpErrors.js";
 import disconnect from "./disconnectHandler.js";
+import { fetchUserWithId } from "../../shared/utils/dbQueries.js";
 
 export default async function socketRouter(io: Server) {
   const parentDir = path.join(import.meta.dirname, "../routes");
@@ -18,6 +19,9 @@ export default async function socketRouter(io: Server) {
   io.use(async (socket, next) => {
     try {
       await authenticateSocket(socket);
+      if (socket.data.user?.id && !(await fetchUserWithId(socket.data.user.id))) {
+        throw new UnauthorizedError("User not found or deleted");
+      }
       next();
     } catch (err) {
       console.error("Socket authentication error:", err);
